@@ -15,6 +15,10 @@ defmodule CiBookTracker.Library.ReadingLog do
       primary? true
       accept [:name, :language_code, :word_goal]
     end
+
+    destroy :destroy do
+      primary? true
+    end
   end
 
   attributes do

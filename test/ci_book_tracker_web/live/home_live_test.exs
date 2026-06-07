@@ -25,6 +25,7 @@ defmodule CiBookTrackerWeb.HomeLiveTest do
     assert has_element?(view, "#reading-log-#{french.id}", "(fr)")
     assert has_element?(view, "#reading-log-#{french.id}", "100 thousand words")
     assert has_element?(view, "#open-reading-log-#{french.id}", "Open")
+    assert has_element?(view, "#delete-reading-log-#{french.id}", "Delete")
 
     assert has_element?(view, "#reading-log-#{spanish.id}", "Spanish essays")
     assert has_element?(view, "#reading-log-#{spanish.id}", "Spanish")
@@ -44,5 +45,39 @@ defmodule CiBookTrackerWeb.HomeLiveTest do
     {:ok, view, _html} = live(conn, ~p"/")
 
     assert has_element?(view, "#reading-log-selector")
+  end
+
+  test "requires confirmation before deleting a reading log", %{conn: conn} do
+    reading_log = Library.create_reading_log!("Spanish novels", "es", 50_000)
+
+    {:ok, view, _html} = live(conn, ~p"/")
+
+    refute has_element?(view, "#delete-reading-log-confirmation")
+
+    view
+    |> element("#delete-reading-log-#{reading_log.id}")
+    |> render_click()
+
+    assert has_element?(
+             view,
+             "#delete-reading-log-confirmation",
+             "Delete Spanish novels?"
+           )
+
+    assert has_element?(
+             view,
+             "#delete-reading-log-confirmation",
+             "permanently deletes this reading log and every book in it"
+           )
+
+    assert has_element?(view, "#confirm-delete-reading-log", "Delete Reading Log")
+    assert has_element?(view, "#cancel-delete-reading-log", "Cancel")
+
+    view
+    |> element("#cancel-delete-reading-log")
+    |> render_click()
+
+    refute has_element?(view, "#delete-reading-log-confirmation")
+    assert Library.get_reading_log!(reading_log.id).name == "Spanish novels"
   end
 end

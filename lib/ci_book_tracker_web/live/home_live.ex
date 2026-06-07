@@ -16,8 +16,19 @@ defmodule CiBookTrackerWeb.HomeLive do
         {:ok,
          socket
          |> assign(:page_title, "Reading logs")
+         |> assign(:delete_reading_log, nil)
          |> assign(:reading_logs, reading_logs)}
     end
+  end
+
+  @impl true
+  def handle_event("confirm_delete", %{"id" => id}, socket) do
+    reading_log = Enum.find(socket.assigns.reading_logs, &(&1.id == id))
+    {:noreply, assign(socket, :delete_reading_log, reading_log)}
+  end
+
+  def handle_event("cancel_delete", _params, socket) do
+    {:noreply, assign(socket, :delete_reading_log, nil)}
   end
 
   @impl true
@@ -89,16 +100,70 @@ defmodule CiBookTrackerWeb.HomeLive do
               </div>
             </div>
 
-            <.link
-              id={"open-reading-log-#{reading_log.id}"}
-              href={~p"/reading-logs/#{reading_log.id}/open"}
-              class="mt-5 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0"
-            >
-              Open <.icon name="hero-arrow-right" class="size-4" />
-            </.link>
+            <div class="mt-5 grid grid-cols-[minmax(0,1fr)_auto] gap-3">
+              <.link
+                id={"open-reading-log-#{reading_log.id}"}
+                href={~p"/reading-logs/#{reading_log.id}/open"}
+                class="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0"
+              >
+                Open <.icon name="hero-arrow-right" class="size-4" />
+              </.link>
+              <button
+                id={"delete-reading-log-#{reading_log.id}"}
+                type="button"
+                phx-click="confirm_delete"
+                phx-value-id={reading_log.id}
+                class="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-rose-200 px-4 text-sm font-semibold text-rose-700 transition hover:border-rose-300 hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2"
+              >
+                <.icon name="hero-trash" class="size-4" /> Delete
+              </button>
+            </div>
           </article>
         </div>
       </section>
+
+      <div
+        :if={@delete_reading_log}
+        id="delete-reading-log-confirmation"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-reading-log-title"
+        class="fixed inset-0 z-50 grid place-items-end bg-slate-950/50 p-4 backdrop-blur-sm sm:place-items-center"
+      >
+        <section class="w-full max-w-md rounded-[2rem] bg-white p-6 shadow-2xl sm:p-8">
+          <div class="grid size-12 place-items-center rounded-2xl bg-rose-100 text-rose-700">
+            <.icon name="hero-exclamation-triangle" class="size-6" />
+          </div>
+          <h2
+            id="delete-reading-log-title"
+            class="mt-5 text-2xl font-semibold tracking-tight text-slate-950"
+          >
+            Delete {@delete_reading_log.name}?
+          </h2>
+          <p class="mt-3 text-sm leading-6 text-slate-600">
+            This permanently deletes this reading log and every book in it. This cannot be undone.
+          </p>
+
+          <div class="mt-7 grid gap-3">
+            <.link
+              id="confirm-delete-reading-log"
+              href={~p"/reading-logs/#{@delete_reading_log.id}"}
+              method="delete"
+              class="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-rose-700 px-5 text-sm font-semibold text-white transition hover:bg-rose-800 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2"
+            >
+              <.icon name="hero-trash" class="size-4" /> Delete Reading Log
+            </.link>
+            <button
+              id="cancel-delete-reading-log"
+              type="button"
+              phx-click="cancel_delete"
+              class="inline-flex min-h-14 items-center justify-center rounded-2xl border border-slate-200 px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+            >
+              Cancel
+            </button>
+          </div>
+        </section>
+      </div>
     </Layouts.app>
     """
   end

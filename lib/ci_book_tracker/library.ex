@@ -4,6 +4,7 @@ defmodule CiBookTracker.Library do
   resources do
     resource CiBookTracker.Library.ReadingLog do
       define :create_reading_log, action: :create, args: [:name, :language_code, :word_goal]
+      define :delete_reading_log, action: :destroy
       define :get_reading_log, action: :read, get_by: [:id]
       define :list_reading_logs, action: :read
     end

@@ -23,6 +23,7 @@ defmodule CiBookTrackerWeb.Router do
     live "/books/new", BookLive.New, :new
 
     get "/reading-logs/:id/open", ReadingLogSessionController, :open
+    delete "/reading-logs/:id", ReadingLogSessionController, :delete
     delete "/reading-log-session", ReadingLogSessionController, :switch
   end
 
