@@ -46,7 +46,8 @@ config :spark,
 
 config :ci_book_tracker,
   generators: [timestamp_type: :utc_datetime],
-  ecto_repos: [CiBookTracker.Repo]
+  ecto_repos: [CiBookTracker.Repo],
+  ash_domains: [CiBookTracker.Library]
 
 # Configures the endpoint
 config :ci_book_tracker, CiBookTrackerWeb.Endpoint,

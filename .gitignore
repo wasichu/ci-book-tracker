@@ -35,3 +35,6 @@ ci_book_tracker-*.tar
 npm-debug.log
 /assets/node_modules/
 
+# Ignore local SQLite databases and their temporary files.
+/*.db
+/*.db-*

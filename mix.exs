@@ -33,12 +33,12 @@ defmodule CiBookTracker.MixProject do
     ]
   end
 
-	defp usage_rules do
-		[
-			file: "AGENTS.md",
-			usage_rules: :all
-		]
-	end
+  defp usage_rules do
+    [
+      file: "AGENTS.md",
+      usage_rules: :all
+    ]
+  end
 
   # Specifies which paths to compile per environment.
   defp elixirc_paths(:test), do: ["lib", "test/support"]
@@ -85,7 +85,7 @@ defmodule CiBookTracker.MixProject do
   # See the documentation for `Mix` for more info on aliases.
   defp aliases do
     [
-      setup: ["deps.get", "assets.setup", "assets.build"],
+      setup: ["deps.get", "ash.setup", "assets.setup", "assets.build"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["compile", "tailwind ci_book_tracker", "esbuild ci_book_tracker"],
       "assets.deploy": [

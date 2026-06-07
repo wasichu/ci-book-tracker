@@ -1,7 +1,11 @@
 import Config
 
 config :ci_book_tracker, CiBookTracker.Repo,
-  database: Path.join(__DIR__, "../path/to/your#{System.get_env("MIX_TEST_PARTITION")}.db"),
+  database:
+    Path.expand(
+      "../ci_book_tracker_test#{System.get_env("MIX_TEST_PARTITION")}.db",
+      __DIR__
+    ),
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: 10
 

@@ -1,7 +1,7 @@
 import Config
 
 config :ci_book_tracker, CiBookTracker.Repo,
-  database: "../path/to/your.db",
+  database: Path.expand("../ci_book_tracker_dev.db", __DIR__),
   show_sensitive_data_on_connection_error: true,
   pool_size: 10
 
