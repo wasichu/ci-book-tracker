@@ -51,7 +51,7 @@ if config_env() == :prod do
     secret_key_base: secret_key_base
 
   config :ci_book_tracker, CiBookTracker.Repo,
-    database: System.get_env("DATABASE_PATH") || "/data/ci_book_tracker.db",
+    database: System.get_env("DATABASE_PATH") || :app_data,
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10")
 
   # ## SSL Support
