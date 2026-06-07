@@ -9,8 +9,18 @@ defmodule CiBookTrackerWeb.BookLive.New do
     "page_count" => "",
     "estimated_words" => "",
     "difficulty_label" => "",
+    "status" => "want_to_read",
+    "started_on" => "",
+    "finished_on" => "",
     "notes" => ""
   }
+
+  @status_options [
+    {"Want to read", "want_to_read"},
+    {"In progress", "in_progress"},
+    {"Finished", "finished"},
+    {"Abandoned", "abandoned"}
+  ]
 
   @impl true
   def mount(_params, _session, socket) do
@@ -23,6 +33,7 @@ defmodule CiBookTrackerWeb.BookLive.New do
        socket
        |> assign(:page_title, "Add book")
        |> assign(:reading_log, reading_log)
+       |> assign(:status_options, @status_options)
        |> assign(:form, to_form(@empty_params, as: :book))}
     else
       {:ok,
@@ -136,6 +147,29 @@ defmodule CiBookTrackerWeb.BookLive.New do
             autocomplete="off"
           />
 
+          <div class="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 sm:p-5">
+            <.input
+              field={@form[:status]}
+              type="select"
+              label="Reading status"
+              options={@status_options}
+            />
+            <p class="-mt-2 text-xs leading-5 text-amber-900/70">
+              Adding a book you've already started or finished? Set its status here.
+            </p>
+          </div>
+
+          <fieldset class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+            <legend class="px-1 text-sm font-semibold text-slate-700">Reading dates</legend>
+            <p class="mt-1 text-xs leading-5 text-slate-500">
+              Optional. Missing dates are filled automatically for in-progress and finished books.
+            </p>
+            <div class="mt-4 grid gap-5 sm:grid-cols-2">
+              <.input field={@form[:started_on]} type="date" label="Started on" />
+              <.input field={@form[:finished_on]} type="date" label="Finished on" />
+            </div>
+          </fieldset>
+
           <.input
             field={@form[:notes]}
             type="textarea"
@@ -188,6 +222,9 @@ defmodule CiBookTrackerWeb.BookLive.New do
       "page_count",
       "estimated_words",
       "difficulty_label",
+      "status",
+      "started_on",
+      "finished_on",
       "notes"
     ])
     |> Map.new(fn {key, value} -> {String.to_existing_atom(key), empty_to_nil(value)} end)

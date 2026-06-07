@@ -37,6 +37,52 @@ defmodule CiBookTracker.LibraryTest do
       assert is_nil(reading_log.word_goal)
     end
 
+    test "defaults reading dates from the initial status" do
+      reading_log = create_reading_log()
+
+      in_progress =
+        Library.add_book!(reading_log.id, "Started", %{status: :in_progress})
+
+      finished =
+        Library.add_book!(reading_log.id, "Finished", %{status: :finished})
+
+      historical =
+        Library.add_book!(reading_log.id, "Historical", %{
+          status: :finished,
+          finished_on: ~D[2026-05-20]
+        })
+
+      assert in_progress.started_on == Date.utc_today()
+      assert is_nil(in_progress.finished_on)
+      assert finished.started_on == Date.utc_today()
+      assert finished.finished_on == Date.utc_today()
+      assert historical.started_on == ~D[2026-05-20]
+      assert historical.finished_on == ~D[2026-05-20]
+    end
+
+    test "preserves explicitly supplied dates for any initial status" do
+      reading_log = create_reading_log()
+
+      want_to_read =
+        Library.add_book!(reading_log.id, "Planned", %{
+          status: :want_to_read,
+          started_on: ~D[2026-05-01],
+          finished_on: ~D[2026-05-02]
+        })
+
+      abandoned =
+        Library.add_book!(reading_log.id, "Paused", %{
+          status: :abandoned,
+          started_on: ~D[2026-04-10],
+          finished_on: ~D[2026-04-20]
+        })
+
+      assert want_to_read.started_on == ~D[2026-05-01]
+      assert want_to_read.finished_on == ~D[2026-05-02]
+      assert abandoned.started_on == ~D[2026-04-10]
+      assert abandoned.finished_on == ~D[2026-04-20]
+    end
+
     test "edits descriptive book fields" do
       book =
         create_reading_log()

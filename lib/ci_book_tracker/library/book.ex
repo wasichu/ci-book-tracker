@@ -25,9 +25,14 @@ defmodule CiBookTracker.Library.Book do
         :page_count,
         :estimated_words,
         :difficulty_label,
+        :status,
         :added_on,
+        :started_on,
+        :finished_on,
         :notes
       ]
+
+      change CiBookTracker.Library.Book.Changes.DefaultReadingDates
     end
 
     update :edit do
@@ -39,7 +44,10 @@ defmodule CiBookTracker.Library.Book do
         :page_count,
         :estimated_words,
         :difficulty_label,
+        :status,
         :added_on,
+        :started_on,
+        :finished_on,
         :notes
       ]
     end
