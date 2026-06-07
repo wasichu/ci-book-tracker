@@ -27,6 +27,7 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
     book =
       Library.add_book!(reading_log.id, "Le Petit Prince", %{
         author: "Antoine de Saint-Exupery",
+        page_count: 108,
         estimated_words: 82_500,
         difficulty_label: "B1",
         notes: "Read aloud."
@@ -36,7 +37,8 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
 
     assert has_element?(view, "#book-detail", "Le Petit Prince")
     assert has_element?(view, "#book-detail", "Antoine de Saint-Exupery")
-    assert has_element?(view, "#book-details", "82.5 thousand words")
+    assert has_element?(view, "#book-details", "108")
+    assert has_element?(view, "#book-details", "82.5 thousand")
     assert has_element?(view, "#book-details", "Not set")
     assert has_element?(view, "#book-notes", "Read aloud.")
     assert has_element?(view, "#back-to-dashboard")
@@ -118,12 +120,43 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
     {:ok, detail, html} = follow_redirect(result, conn)
     assert html =~ "New title was updated."
     assert has_element?(detail, "#book-detail", "New title")
-    assert has_element?(detail, "#book-details", "1.5 million words")
+    assert has_element?(detail, "#book-details", "1.5 million")
 
     updated = Library.get_book!(book.id)
     assert updated.author == "New author"
     assert updated.status == :in_progress
     assert updated.started_on == ~D[2026-06-01]
+  end
+
+  test "allows total words to be edited when page count is present", %{conn: conn} do
+    reading_log = Library.create_reading_log!("French", "fr", nil)
+
+    book =
+      Library.add_book!(reading_log.id, "Custom estimate", %{
+        page_count: 200,
+        estimated_words: 50_000
+      })
+
+    conn = activate(conn, reading_log)
+    {:ok, view, _html} = live(conn, ~p"/books/#{book.id}/edit")
+
+    assert has_element?(view, "#book_page_count[value='200']")
+    assert has_element?(view, "#book_estimated_words[type='number'][value='50000']")
+    refute has_element?(view, "#calculated-estimated-words")
+
+    result =
+      view
+      |> form("#edit-book-form",
+        book: %{page_count: "200", estimated_words: "42000"}
+      )
+      |> render_submit()
+
+    assert {:error, {:live_redirect, %{to: path}}} = result
+    assert path == "/books/#{book.id}"
+
+    updated = Library.get_book!(book.id)
+    assert updated.page_count == 200
+    assert updated.estimated_words == 42_000
   end
 
   test "confirms deletion and returns to a refreshed dashboard", %{conn: conn} do

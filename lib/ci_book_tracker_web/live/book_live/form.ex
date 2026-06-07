@@ -47,14 +47,14 @@ defmodule CiBookTrackerWeb.BookLive.Form do
 
   @impl true
   def handle_event("validate", %{"book" => params}, socket) do
-    params = sync_estimated_words(params)
+    params = sync_estimated_words(params, socket.assigns.book)
     {:noreply, assign(socket, :form, to_form(params, as: :book))}
   end
 
   def handle_event("save", %{"book" => params}, socket) do
     params =
       params
-      |> sync_estimated_words()
+      |> sync_estimated_words(socket.assigns.book)
       |> normalize_params()
 
     if blank?(params["title"]) do
@@ -128,7 +128,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
             />
 
             <div
-              :if={valid_page_count?(@form[:page_count].value)}
+              :if={is_nil(@book) && valid_page_count?(@form[:page_count].value)}
               id="calculated-estimated-words"
               class="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5"
             >
@@ -151,7 +151,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
               </p>
             </div>
 
-            <div :if={!valid_page_count?(@form[:page_count].value)}>
+            <div :if={@book || !valid_page_count?(@form[:page_count].value)}>
               <input
                 type="hidden"
                 name={@form[:estimated_words_mode].name}
@@ -165,7 +165,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
                 min="1"
                 inputmode="numeric"
               />
-              <p class="-mt-2 text-xs leading-5 text-slate-500">
+              <p :if={is_nil(@book)} class="-mt-2 text-xs leading-5 text-slate-500">
                 Enter the total word estimate when the page count is unknown.
               </p>
             </div>
@@ -265,7 +265,11 @@ defmodule CiBookTrackerWeb.BookLive.Form do
     |> Map.new(fn {key, value} -> {String.to_existing_atom(key), empty_to_nil(value)} end)
   end
 
-  defp sync_estimated_words(params) do
+  defp sync_estimated_words(params, %CiBookTracker.Library.Book{}) do
+    Map.put(params, "estimated_words_mode", "manual")
+  end
+
+  defp sync_estimated_words(params, nil) do
     case parse_positive_integer(params["page_count"]) do
       {:ok, page_count} ->
         params
@@ -339,7 +343,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
       "author" => book.author || "",
       "page_count" => input_value(book.page_count),
       "estimated_words" => input_value(book.estimated_words),
-      "estimated_words_mode" => if(book.page_count, do: "calculated", else: "manual"),
+      "estimated_words_mode" => "manual",
       "difficulty_label" => book.difficulty_label || "",
       "status" => Atom.to_string(book.status),
       "started_on" => input_value(book.started_on),
@@ -358,6 +362,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
   defp form_heading(_book), do: "Edit book"
   defp form_intro(nil), do: "Start with what you know. Everything except the title is optional."
   defp form_intro(_book), do: "Update the details and reading history for this book."
+
   defp save_label(nil), do: "Save Book"
   defp save_label(_book), do: "Save Changes"
   defp form_id(nil), do: "add-book-form"

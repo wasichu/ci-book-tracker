@@ -306,15 +306,15 @@ defmodule CiBookTrackerWeb.BookLive.Show do
   defp status_message(book, "reopen"), do: "Reopened #{book.title}."
 
   defp format_pages(nil), do: nil
-  defp format_pages(page_count), do: "#{format_number(page_count)} pages"
+  defp format_pages(page_count), do: format_number(page_count)
 
   defp format_words(nil), do: nil
 
   defp format_words(words) when words >= 1_000_000,
-    do: "#{compact(words / 1_000_000)} million words"
+    do: "#{compact(words / 1_000_000)} million"
 
-  defp format_words(words) when words >= 1_000, do: "#{compact(words / 1_000)} thousand words"
-  defp format_words(words), do: "#{format_number(words)} words"
+  defp format_words(words) when words >= 1_000, do: "#{compact(words / 1_000)} thousand"
+  defp format_words(words), do: format_number(words)
 
   defp compact(number) do
     if number == trunc(number),
