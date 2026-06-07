@@ -27,10 +27,6 @@ defmodule CiBookTrackerWeb.HomeLive do
     {:noreply, put_flash(socket, :info, "Reading log setup is the next feature.")}
   end
 
-  def handle_event("add_book", _params, socket) do
-    {:noreply, put_flash(socket, :info, "Manual book entry is the next feature.")}
-  end
-
   @impl true
   def render(assigns) do
     ~H"""
@@ -136,7 +132,7 @@ defmodule CiBookTrackerWeb.HomeLive do
 
         <.button
           id="add-book"
-          phx-click="add_book"
+          navigate={~p"/books/new"}
           variant="primary"
           class="flex min-h-16 w-full items-center justify-center gap-3 rounded-2xl bg-slate-950 px-6 text-base font-semibold text-white shadow-lg shadow-slate-900/15 transition hover:-translate-y-0.5 hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0"
         >

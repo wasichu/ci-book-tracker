@@ -58,8 +58,7 @@ defmodule CiBookTrackerWeb.HomeLiveTest do
     assert html =~ "Intermediate"
     assert html =~ "96 pages"
 
-    view |> element("#add-book") |> render_click()
-    assert render(view) =~ "Manual book entry is the next feature."
+    assert has_element?(view, "#add-book[href='/books/new']")
   end
 
   test "shows empty placeholders for status groups without books", %{conn: conn} do

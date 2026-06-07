@@ -18,6 +18,7 @@ defmodule CiBookTrackerWeb.Router do
     pipe_through :browser
 
     live "/", HomeLive, :index
+    live "/books/new", BookLive.New, :new
   end
 
   # Other scopes may use custom stacks.
