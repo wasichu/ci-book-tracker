@@ -45,7 +45,9 @@ defmodule CiBookTrackerWeb.Layouts do
             <.icon name="hero-book-open" class="size-5" />
           </span>
           <span>
-            <span class="block text-sm font-semibold tracking-tight">Reading Log</span>
+            <span class="block text-sm font-semibold tracking-tight">
+              Comprehensible Input Reading Log
+            </span>
             <span class="block text-xs text-slate-500">Language learning, one book at a time</span>
           </span>
         </a>
