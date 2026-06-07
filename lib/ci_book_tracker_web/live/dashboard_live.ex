@@ -224,7 +224,14 @@ defmodule CiBookTrackerWeb.DashboardLive do
     >
       <div class="flex items-start justify-between gap-4">
         <div class="min-w-0">
-          <h4 class="font-semibold leading-6 text-slate-950">{@book.title}</h4>
+          <h4 class="font-semibold leading-6 text-slate-950">
+            <.link
+              navigate={~p"/books/#{@book.id}"}
+              class="rounded-sm transition hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+            >
+              {@book.title}
+            </.link>
+          </h4>
           <p :if={@book.author} class="mt-1 text-sm text-slate-500">{@book.author}</p>
         </div>
         <span

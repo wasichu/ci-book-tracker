@@ -20,7 +20,9 @@ defmodule CiBookTrackerWeb.Router do
     live "/", HomeLive, :index
     live "/dashboard", DashboardLive, :index
     live "/reading-logs/new", ReadingLogLive.New, :new
-    live "/books/new", BookLive.New, :new
+    live "/books/new", BookLive.Form, :new
+    live "/books/:id/edit", BookLive.Form, :edit
+    live "/books/:id", BookLive.Show, :show
 
     get "/reading-logs/:id/open", ReadingLogSessionController, :open
     delete "/reading-logs/:id", ReadingLogSessionController, :delete

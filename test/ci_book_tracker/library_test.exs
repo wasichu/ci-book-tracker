@@ -125,7 +125,7 @@ defmodule CiBookTracker.LibraryTest do
       reopened = Library.reopen_book!(finished)
       assert reopened.status == :in_progress
       assert reopened.started_on == Date.utc_today()
-      assert is_nil(reopened.finished_on)
+      assert reopened.finished_on == Date.utc_today()
 
       abandoned = Library.abandon_book!(reopened)
       assert abandoned.status == :abandoned
@@ -151,6 +151,35 @@ defmodule CiBookTracker.LibraryTest do
         |> Library.reopen_book!()
 
       assert reopened.started_on == original_started_on
+    end
+
+    test "finishing and abandoning backfill missing reading dates" do
+      reading_log = create_reading_log()
+
+      finished_on = Date.add(Date.utc_today(), -2)
+
+      finished =
+        reading_log.id
+        |> Library.add_book!("Finished without a start", %{finished_on: finished_on})
+        |> Library.finish_book!()
+
+      abandoned =
+        reading_log.id
+        |> Library.add_book!("Abandoned without a start")
+        |> Library.abandon_book!()
+
+      assert finished.started_on == finished_on
+      assert finished.finished_on == finished_on
+      assert abandoned.started_on == Date.utc_today()
+    end
+
+    test "deletes a book" do
+      book =
+        create_reading_log()
+        |> then(&Library.add_book!(&1.id, "Delete me"))
+
+      assert :ok = Library.delete_book(book)
+      assert {:error, _error} = Library.get_book(book.id)
     end
   end
 

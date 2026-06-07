@@ -1,4 +1,4 @@
-defmodule CiBookTrackerWeb.BookLive.New do
+defmodule CiBookTrackerWeb.BookLive.Form do
   use CiBookTrackerWeb, :live_view
 
   alias CiBookTracker.Library
@@ -24,21 +24,24 @@ defmodule CiBookTrackerWeb.BookLive.New do
   ]
 
   @impl true
-  def mount(_params, session, socket) do
+  def mount(params, session, socket) do
     reading_log = active_reading_log(session)
 
-    if reading_log do
+    with %{} <- reading_log,
+         {:ok, book} <- load_book(socket.assigns.live_action, params, reading_log) do
       {:ok,
        socket
-       |> assign(:page_title, "Add book")
+       |> assign(:page_title, page_title(socket.assigns.live_action))
        |> assign(:reading_log, reading_log)
+       |> assign(:book, book)
        |> assign(:status_options, @status_options)
-       |> assign(:form, to_form(@empty_params, as: :book))}
+       |> assign(:form, to_form(form_params(book), as: :book))}
     else
-      {:ok,
-       socket
-       |> put_flash(:error, "Create a reading log before adding a book.")
-       |> push_navigate(to: ~p"/")}
+      _missing ->
+        {:ok,
+         socket
+         |> put_flash(:error, missing_message(socket.assigns.live_action))
+         |> push_navigate(to: missing_path(reading_log))}
     end
   end
 
@@ -75,7 +78,7 @@ defmodule CiBookTrackerWeb.BookLive.New do
       <section id="add-book-page" class="space-y-7">
         <header>
           <.link
-            navigate={~p"/dashboard"}
+            navigate={back_path(@book)}
             class="inline-flex min-h-11 items-center gap-2 rounded-xl pr-3 text-sm font-semibold text-slate-600 transition hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
           >
             <.icon name="hero-arrow-left" class="size-4" /> Back to dashboard
@@ -85,16 +88,16 @@ defmodule CiBookTrackerWeb.BookLive.New do
             {@reading_log.name}
           </p>
           <h1 class="mt-2 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-            Add a book
+            {form_heading(@book)}
           </h1>
           <p class="mt-3 max-w-xl text-base leading-7 text-slate-600">
-            Start with what you know. Everything except the title is optional.
+            {form_intro(@book)}
           </p>
         </header>
 
         <.form
           for={@form}
-          id="add-book-form"
+          id={form_id(@book)}
           phx-change="validate"
           phx-submit="save"
           class="space-y-6 rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60 sm:p-8"
@@ -214,7 +217,7 @@ defmodule CiBookTrackerWeb.BookLive.New do
               phx-disable-with="Saving..."
               class="flex min-h-16 w-full items-center justify-center gap-3 rounded-2xl bg-amber-700 px-6 text-base font-semibold text-white shadow-lg shadow-amber-900/15 transition hover:-translate-y-0.5 hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0 disabled:translate-y-0"
             >
-              <.icon name="hero-book-open" class="size-5" /> Save Book
+              <.icon name="hero-book-open" class="size-5" /> {save_label(@book)}
             </.button>
           </div>
         </.form>
@@ -224,16 +227,12 @@ defmodule CiBookTrackerWeb.BookLive.New do
   end
 
   defp save_book(socket, params) do
-    case Library.add_book(
-           socket.assigns.reading_log.id,
-           params["title"],
-           book_attributes(params)
-         ) do
+    case persist_book(socket.assigns.book, socket.assigns.reading_log, params) do
       {:ok, book} ->
         {:noreply,
          socket
-         |> put_flash(:info, "#{book.title} was added to your reading log.")
-         |> push_navigate(to: ~p"/dashboard")}
+         |> put_flash(:info, save_message(socket.assigns.book, book))
+         |> push_navigate(to: save_path(socket.assigns.book, book))}
 
       {:error, _error} ->
         {:noreply,
@@ -241,6 +240,14 @@ defmodule CiBookTrackerWeb.BookLive.New do
          |> put_flash(:error, "We couldn't save this book. Check the details and try again.")
          |> assign(:form, to_form(params, as: :book, action: :validate))}
     end
+  end
+
+  defp persist_book(nil, reading_log, params) do
+    Library.add_book(reading_log.id, params["title"], book_attributes(params))
+  end
+
+  defp persist_book(book, _reading_log, params) do
+    Library.edit_book(book, Map.put(book_attributes(params), :title, params["title"]))
   end
 
   defp book_attributes(params) do
@@ -311,6 +318,60 @@ defmodule CiBookTrackerWeb.BookLive.New do
       _missing -> nil
     end
   end
+
+  defp load_book(:new, _params, _reading_log), do: {:ok, nil}
+
+  defp load_book(:edit, %{"id" => id}, reading_log) do
+    case Library.get_book(id) do
+      {:ok, %{reading_log_id: reading_log_id} = book} when reading_log_id == reading_log.id ->
+        {:ok, book}
+
+      _missing ->
+        {:error, :not_found}
+    end
+  end
+
+  defp form_params(nil), do: @empty_params
+
+  defp form_params(book) do
+    %{
+      "title" => book.title || "",
+      "author" => book.author || "",
+      "page_count" => input_value(book.page_count),
+      "estimated_words" => input_value(book.estimated_words),
+      "estimated_words_mode" => if(book.page_count, do: "calculated", else: "manual"),
+      "difficulty_label" => book.difficulty_label || "",
+      "status" => Atom.to_string(book.status),
+      "started_on" => input_value(book.started_on),
+      "finished_on" => input_value(book.finished_on),
+      "notes" => book.notes || ""
+    }
+  end
+
+  defp input_value(nil), do: ""
+  defp input_value(%Date{} = value), do: Date.to_iso8601(value)
+  defp input_value(value), do: to_string(value)
+
+  defp page_title(:new), do: "Add book"
+  defp page_title(:edit), do: "Edit book"
+  defp form_heading(nil), do: "Add a book"
+  defp form_heading(_book), do: "Edit book"
+  defp form_intro(nil), do: "Start with what you know. Everything except the title is optional."
+  defp form_intro(_book), do: "Update the details and reading history for this book."
+  defp save_label(nil), do: "Save Book"
+  defp save_label(_book), do: "Save Changes"
+  defp form_id(nil), do: "add-book-form"
+  defp form_id(_book), do: "edit-book-form"
+  defp back_path(nil), do: ~p"/dashboard"
+  defp back_path(book), do: ~p"/books/#{book.id}"
+  defp save_path(nil, _book), do: ~p"/dashboard"
+  defp save_path(_existing_book, book), do: ~p"/books/#{book.id}"
+  defp save_message(nil, book), do: "#{book.title} was added to your reading log."
+  defp save_message(_existing_book, book), do: "#{book.title} was updated."
+  defp missing_message(:new), do: "Create a reading log before adding a book."
+  defp missing_message(:edit), do: "That book isn't available in the active reading log."
+  defp missing_path(nil), do: ~p"/"
+  defp missing_path(_reading_log), do: ~p"/dashboard"
 
   defp format_number(value) when is_binary(value) do
     case Integer.parse(value) do

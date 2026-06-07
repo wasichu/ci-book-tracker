@@ -11,12 +11,14 @@ defmodule CiBookTracker.Library do
 
     resource CiBookTracker.Library.Book do
       define :add_book, action: :create, args: [:reading_log_id, :title]
+      define :get_book, action: :read, get_by: [:id]
       define :list_books, action: :read
       define :edit_book, action: :edit
       define :start_book, action: :start
       define :finish_book, action: :finish
       define :abandon_book, action: :abandon
       define :reopen_book, action: :reopen
+      define :delete_book, action: :destroy
     end
   end
 end

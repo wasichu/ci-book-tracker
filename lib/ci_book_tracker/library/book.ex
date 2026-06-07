@@ -62,12 +62,13 @@ defmodule CiBookTracker.Library.Book do
     update :finish do
       accept []
       change set_attribute(:status, :finished)
-      change set_attribute(:finished_on, &Date.utc_today/0)
+      change CiBookTracker.Library.Book.Changes.CompleteReadingDates
     end
 
     update :abandon do
       accept []
       change set_attribute(:status, :abandoned)
+      change CiBookTracker.Library.Book.Changes.SetStartedOnIfMissing
       change set_attribute(:finished_on, nil)
     end
 
@@ -75,8 +76,9 @@ defmodule CiBookTracker.Library.Book do
       accept []
       change set_attribute(:status, :in_progress)
       change CiBookTracker.Library.Book.Changes.SetStartedOnIfMissing
-      change set_attribute(:finished_on, nil)
     end
+
+    destroy :destroy
   end
 
   attributes do
