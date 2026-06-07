@@ -8,6 +8,7 @@ defmodule CiBookTrackerWeb.BookLive.New do
     "author" => "",
     "page_count" => "",
     "estimated_words" => "",
+    "estimated_words_mode" => "manual",
     "difficulty_label" => "",
     "status" => "want_to_read",
     "started_on" => "",
@@ -45,14 +46,14 @@ defmodule CiBookTrackerWeb.BookLive.New do
 
   @impl true
   def handle_event("validate", %{"book" => params}, socket) do
-    params = maybe_estimate_words(params)
+    params = sync_estimated_words(params)
     {:noreply, assign(socket, :form, to_form(params, as: :book))}
   end
 
   def handle_event("save", %{"book" => params}, socket) do
     params =
       params
-      |> maybe_estimate_words()
+      |> sync_estimated_words()
       |> normalize_params()
 
     if blank?(params["title"]) do
@@ -115,7 +116,7 @@ defmodule CiBookTrackerWeb.BookLive.New do
             autocomplete="off"
           />
 
-          <div class="grid gap-5 sm:grid-cols-2">
+          <div class="space-y-4">
             <.input
               field={@form[:page_count]}
               type="number"
@@ -125,17 +126,46 @@ defmodule CiBookTrackerWeb.BookLive.New do
               inputmode="numeric"
             />
 
-            <div>
+            <div
+              :if={valid_page_count?(@form[:page_count].value)}
+              id="calculated-estimated-words"
+              class="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5"
+            >
+              <input
+                type="hidden"
+                name={@form[:estimated_words].name}
+                value={@form[:estimated_words].value}
+              />
+              <input
+                type="hidden"
+                name={@form[:estimated_words_mode].name}
+                value="calculated"
+              />
+              <p class="text-sm font-medium text-slate-600">Estimated Total Words</p>
+              <p class="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
+                {format_number(@form[:estimated_words].value)}
+              </p>
+              <p class="mt-1 flex items-center gap-1.5 text-xs leading-5 text-slate-500">
+                <.icon name="hero-calculator" class="size-4" /> Using 250 words per page
+              </p>
+            </div>
+
+            <div :if={!valid_page_count?(@form[:page_count].value)}>
+              <input
+                type="hidden"
+                name={@form[:estimated_words_mode].name}
+                value="manual"
+              />
               <.input
                 field={@form[:estimated_words]}
                 type="number"
-                label="Estimated words"
+                label="Estimated Total Words"
                 placeholder="24000"
                 min="1"
                 inputmode="numeric"
               />
               <p class="-mt-2 text-xs leading-5 text-slate-500">
-                Leave blank to estimate 250 words per page. You can edit the result.
+                Enter the total word estimate when the page count is unknown.
               </p>
             </div>
           </div>
@@ -230,19 +260,37 @@ defmodule CiBookTrackerWeb.BookLive.New do
     |> Map.new(fn {key, value} -> {String.to_existing_atom(key), empty_to_nil(value)} end)
   end
 
-  defp maybe_estimate_words(params) do
-    if blank?(params["estimated_words"]) do
-      case Integer.parse(params["page_count"] || "") do
-        {page_count, ""} when page_count > 0 ->
-          Map.put(params, "estimated_words", Integer.to_string(page_count * 250))
+  defp sync_estimated_words(params) do
+    case parse_positive_integer(params["page_count"]) do
+      {:ok, page_count} ->
+        params
+        |> Map.put("estimated_words", Integer.to_string(page_count * 250))
+        |> Map.put("estimated_words_mode", "calculated")
 
-        _other ->
-          params
-      end
-    else
-      params
+      :error ->
+        params
+        |> maybe_clear_calculated_estimate()
+        |> Map.put("estimated_words_mode", "manual")
     end
   end
+
+  defp maybe_clear_calculated_estimate(%{"estimated_words_mode" => "calculated"} = params),
+    do: Map.put(params, "estimated_words", "")
+
+  defp maybe_clear_calculated_estimate(params), do: params
+
+  defp valid_page_count?(value), do: match?({:ok, _page_count}, parse_positive_integer(value))
+
+  defp parse_positive_integer(value) when is_integer(value) and value > 0, do: {:ok, value}
+
+  defp parse_positive_integer(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {page_count, ""} when page_count > 0 -> {:ok, page_count}
+      _other -> :error
+    end
+  end
+
+  defp parse_positive_integer(_value), do: :error
 
   defp normalize_params(params) do
     params = Map.merge(@empty_params, params)
@@ -256,4 +304,21 @@ defmodule CiBookTrackerWeb.BookLive.New do
   defp empty_to_nil(value), do: value
 
   defp blank?(value), do: value in [nil, ""]
+
+  defp format_number(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {number, ""} -> format_number(number)
+      _other -> value
+    end
+  end
+
+  defp format_number(number) when is_integer(number) do
+    number
+    |> Integer.to_string()
+    |> String.reverse()
+    |> String.graphemes()
+    |> Enum.chunk_every(3)
+    |> Enum.map_join(",", &Enum.join/1)
+    |> String.reverse()
+  end
 end

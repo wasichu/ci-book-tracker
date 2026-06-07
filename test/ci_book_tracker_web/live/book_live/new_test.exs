@@ -19,7 +19,8 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     assert has_element?(view, "label", "Title")
     assert has_element?(view, "label", "Author")
     assert has_element?(view, "label", "Page count")
-    assert has_element?(view, "label", "Estimated words")
+    assert has_element?(view, "label", "Estimated Total Words")
+    refute has_element?(view, "#calculated-estimated-words")
     assert has_element?(view, "label", "Difficulty")
     assert has_element?(view, "label", "Reading status")
     assert has_element?(view, "#book_status option[value='want_to_read']", "Want to read")
@@ -34,7 +35,7 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     assert has_element?(view, "#save-book", "Save Book")
   end
 
-  test "estimates words from page count when the estimate is blank", %{conn: conn} do
+  test "shows a read-only formatted total calculated from page count", %{conn: conn} do
     create_reading_log()
     {:ok, view, _html} = live(conn, ~p"/books/new")
 
@@ -42,10 +43,13 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     |> form("#add-book-form", book: %{page_count: "120", estimated_words: ""})
     |> render_change()
 
-    assert has_element?(view, "#book_estimated_words[value='30000']")
+    assert has_element?(view, "#calculated-estimated-words", "30,000")
+    assert has_element?(view, "#calculated-estimated-words", "Using 250 words per page")
+    assert has_element?(view, "input[name='book[estimated_words]'][type='hidden'][value='30000']")
+    refute has_element?(view, "#book_estimated_words[type='number']")
   end
 
-  test "preserves a user-edited word estimate", %{conn: conn} do
+  test "page count overrides a conflicting manual estimate", %{conn: conn} do
     create_reading_log()
     {:ok, view, _html} = live(conn, ~p"/books/new")
 
@@ -53,7 +57,42 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     |> form("#add-book-form", book: %{page_count: "120", estimated_words: "27500"})
     |> render_change()
 
-    assert has_element?(view, "#book_estimated_words[value='27500']")
+    assert has_element?(view, "#calculated-estimated-words", "30,000")
+    assert has_element?(view, "input[name='book[estimated_words]'][value='30000']")
+  end
+
+  test "allows a manual total when page count is blank", %{conn: conn} do
+    create_reading_log()
+    {:ok, view, _html} = live(conn, ~p"/books/new")
+
+    view
+    |> form("#add-book-form", book: %{page_count: "", estimated_words: "27500"})
+    |> render_change()
+
+    assert has_element?(view, "#book_estimated_words[type='number'][value='27500']")
+    refute has_element?(view, "#calculated-estimated-words")
+  end
+
+  test "clears a calculated total when page count is removed", %{conn: conn} do
+    create_reading_log()
+    {:ok, view, _html} = live(conn, ~p"/books/new")
+
+    view
+    |> form("#add-book-form", book: %{page_count: "120", estimated_words: ""})
+    |> render_change()
+
+    view
+    |> form("#add-book-form",
+      book: %{
+        page_count: "",
+        estimated_words: "30000",
+        estimated_words_mode: "calculated"
+      }
+    )
+    |> render_change()
+
+    assert has_element?(view, "#book_estimated_words[type='number'][value='']")
+    refute has_element?(view, "#calculated-estimated-words")
   end
 
   test "shows a validation error when title is blank", %{conn: conn} do
