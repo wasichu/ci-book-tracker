@@ -47,6 +47,8 @@ defmodule CiBookTrackerWeb.HomeLiveTest do
     assert has_element?(view, "#words-completed", "16,000")
     assert has_element?(view, "#goal-progress", "16%")
     assert has_element?(view, "#add-book", "Add Book")
+    assert has_element?(view, "#dashboard", "French")
+    assert has_element?(view, "#dashboard", "100 thousand words")
 
     assert has_element?(view, "#books-finished #book-#{finished.id}", "Le Petit Prince")
     assert has_element?(view, "#books-in_progress #book-#{in_progress.id}", "L'Etranger")
@@ -77,6 +79,15 @@ defmodule CiBookTrackerWeb.HomeLiveTest do
 
     assert has_element?(view, "#dashboard", "Build your reading habit one book at a time.")
     refute has_element?(view, "#goal-progress")
+  end
+
+  test "formats a million-word goal naturally", %{conn: conn} do
+    Library.create_reading_log!("Spanish", "es", 1_500_000)
+
+    {:ok, view, _html} = live(conn, ~p"/")
+
+    assert has_element?(view, "#dashboard", "Spanish")
+    assert has_element?(view, "#dashboard", "1.5 million words")
   end
 
   test "shows the status controls appropriate for each book", %{conn: conn} do

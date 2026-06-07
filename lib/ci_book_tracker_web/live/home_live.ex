@@ -2,6 +2,7 @@ defmodule CiBookTrackerWeb.HomeLive do
   use CiBookTrackerWeb, :live_view
 
   alias CiBookTracker.Library
+  alias CiBookTrackerWeb.ReadingLogFormat
 
   @status_groups [
     {:in_progress, "In progress", "hero-book-open", "bg-sky-100 text-sky-800"},
@@ -75,7 +76,7 @@ defmodule CiBookTrackerWeb.HomeLive do
       <section :if={@reading_log} id="dashboard" class="space-y-8">
         <header class="space-y-3">
           <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
-            <span>{@reading_log.language_code}</span>
+            <span>{ReadingLogFormat.language_name(@reading_log.language_code)}</span>
             <span aria-hidden="true" class="size-1 rounded-full bg-amber-400"></span>
             <span>Reading dashboard</span>
           </div>
@@ -83,7 +84,8 @@ defmodule CiBookTrackerWeb.HomeLive do
             {@reading_log.name}
           </h1>
           <p :if={@reading_log.word_goal} class="text-base leading-7 text-slate-600">
-            Keep moving toward your {format_number(@reading_log.word_goal)} word goal.
+            Your goal is {ReadingLogFormat.format_word_goal(@reading_log.word_goal)}. Keep moving
+            one book at a time.
           </p>
           <p :if={is_nil(@reading_log.word_goal)} class="text-base leading-7 text-slate-600">
             Build your reading habit one book at a time.

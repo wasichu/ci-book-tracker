@@ -2,12 +2,20 @@ defmodule CiBookTrackerWeb.ReadingLogLive.New do
   use CiBookTrackerWeb, :live_view
 
   alias CiBookTracker.Library
+  alias CiBookTrackerWeb.ReadingLogFormat
 
   @empty_params %{
     "name" => "",
     "language_code" => "es",
-    "word_goal" => ""
+    "goal_amount" => "",
+    "goal_unit" => "thousand"
   }
+
+  @goal_units [
+    {"Words", "words"},
+    {"Thousand words", "thousand"},
+    {"Million words", "million"}
+  ]
 
   @impl true
   def mount(_params, _session, socket) do
@@ -15,6 +23,8 @@ defmodule CiBookTrackerWeb.ReadingLogLive.New do
       {:ok,
        socket
        |> assign(:page_title, "Create reading log")
+       |> assign(:language_options, ReadingLogFormat.language_options())
+       |> assign(:goal_units, @goal_units)
        |> assign(:form, to_form(@empty_params, as: :reading_log))}
     else
       {:ok,
@@ -32,17 +42,14 @@ defmodule CiBookTrackerWeb.ReadingLogLive.New do
   def handle_event("save", %{"reading_log" => params}, socket) do
     params = normalize_params(params)
 
-    if params["name"] == "" do
-      form =
-        to_form(params,
-          as: :reading_log,
-          action: :validate,
-          errors: [name: {"can't be blank", []}]
-        )
+    errors =
+      []
+      |> maybe_add_name_error(params)
+      |> maybe_add_goal_error(params)
 
-      {:noreply, assign(socket, :form, form)}
-    else
-      save_reading_log(socket, params)
+    case errors do
+      [] -> save_reading_log(socket, params)
+      errors -> {:noreply, assign(socket, :form, error_form(params, errors))}
     end
   end
 
@@ -87,25 +94,43 @@ defmodule CiBookTrackerWeb.ReadingLogLive.New do
 
           <.input
             field={@form[:language_code]}
-            label="Language code"
-            placeholder="es"
+            type="select"
+            label="Language"
+            options={@language_options}
             required
-            autocomplete="off"
-            maxlength="10"
           />
 
-          <div>
-            <.input
-              field={@form[:word_goal]}
-              type="number"
-              label="Word goal"
-              placeholder="100000"
-              min="1"
-              inputmode="numeric"
-            />
+          <fieldset>
+            <legend class="text-sm font-medium text-slate-700">Word goal</legend>
+            <div class="mt-1.5 grid grid-cols-[minmax(0,1fr)_minmax(9rem,0.8fr)] gap-3">
+              <.input
+                field={@form[:goal_amount]}
+                type="number"
+                label="Goal amount"
+                placeholder="500"
+                min="0.001"
+                step="any"
+                inputmode="decimal"
+              />
+              <.input
+                field={@form[:goal_unit]}
+                type="select"
+                label="Unit"
+                options={@goal_units}
+              />
+            </div>
             <p class="-mt-2 text-xs leading-5 text-slate-500">
-              Optional. You can start tracking books without setting a target.
+              Optional. For example, 500 thousand words is stored as 500,000 words.
             </p>
+          </fieldset>
+
+          <div class="rounded-2xl bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
+            <div class="flex gap-3">
+              <.icon name="hero-light-bulb" class="mt-1 size-4 shrink-0 text-amber-700" />
+              <p>
+                Pick a goal that feels useful, not perfect. You can start tracking without one.
+              </p>
+            </div>
           </div>
 
           <div class="border-t border-slate-100 pt-6">
@@ -129,7 +154,7 @@ defmodule CiBookTrackerWeb.ReadingLogLive.New do
     case Library.create_reading_log(
            params["name"],
            params["language_code"],
-           empty_to_nil(params["word_goal"])
+           word_goal(params)
          ) do
       {:ok, reading_log} ->
         {:noreply,
@@ -162,6 +187,40 @@ defmodule CiBookTrackerWeb.ReadingLogLive.New do
 
   defp complete_params(params), do: Map.merge(@empty_params, params)
 
-  defp empty_to_nil(value) when value in [nil, ""], do: nil
-  defp empty_to_nil(value), do: value
+  defp maybe_add_name_error(errors, %{"name" => ""}),
+    do: [{:name, {"can't be blank", []}} | errors]
+
+  defp maybe_add_name_error(errors, _params), do: errors
+
+  defp maybe_add_goal_error(errors, params) do
+    case parse_goal(params) do
+      {:ok, _word_goal} -> errors
+      :error -> [{:goal_amount, {"must be a positive number", []}} | errors]
+    end
+  end
+
+  defp error_form(params, errors) do
+    to_form(params, as: :reading_log, action: :validate, errors: errors)
+  end
+
+  defp word_goal(params) do
+    {:ok, word_goal} = parse_goal(params)
+    word_goal
+  end
+
+  defp parse_goal(%{"goal_amount" => amount}) when amount in [nil, ""], do: {:ok, nil}
+
+  defp parse_goal(%{"goal_amount" => amount, "goal_unit" => unit}) do
+    multiplier = %{"words" => 1, "thousand" => 1_000, "million" => 1_000_000}
+
+    with {number, ""} <- Float.parse(amount),
+         true <- number > 0,
+         multiplier when is_integer(multiplier) <- multiplier[unit],
+         word_goal <- round(number * multiplier),
+         true <- word_goal > 0 do
+      {:ok, word_goal}
+    else
+      _invalid -> :error
+    end
+  end
 end
