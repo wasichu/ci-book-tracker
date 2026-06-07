@@ -47,7 +47,7 @@ defmodule CiBookTracker.Library.Book do
     update :start do
       accept []
       change set_attribute(:status, :in_progress)
-      change set_attribute(:started_on, &Date.utc_today/0)
+      change CiBookTracker.Library.Book.Changes.SetStartedOnIfMissing
       change set_attribute(:finished_on, nil)
     end
 
@@ -66,7 +66,7 @@ defmodule CiBookTracker.Library.Book do
     update :reopen do
       accept []
       change set_attribute(:status, :in_progress)
-      change set_attribute(:started_on, &Date.utc_today/0)
+      change CiBookTracker.Library.Book.Changes.SetStartedOnIfMissing
       change set_attribute(:finished_on, nil)
     end
   end

@@ -78,4 +78,55 @@ defmodule CiBookTrackerWeb.HomeLiveTest do
     assert has_element?(view, "#dashboard", "Build your reading habit one book at a time.")
     refute has_element?(view, "#goal-progress")
   end
+
+  test "shows the status controls appropriate for each book", %{conn: conn} do
+    reading_log = Library.create_reading_log!("Spanish", "es", 100_000)
+    want_to_read = Library.add_book!(reading_log.id, "Want")
+    in_progress = reading_log.id |> Library.add_book!("Reading") |> Library.start_book!()
+    finished = reading_log.id |> Library.add_book!("Done") |> Library.finish_book!()
+    abandoned = reading_log.id |> Library.add_book!("Paused") |> Library.abandon_book!()
+
+    {:ok, view, _html} = live(conn, ~p"/")
+
+    assert has_element?(view, "#book-#{want_to_read.id}-start", "Start")
+    assert has_element?(view, "#book-#{want_to_read.id}-finish", "Finish")
+    refute has_element?(view, "#book-#{want_to_read.id}-abandon")
+
+    assert has_element?(view, "#book-#{in_progress.id}-finish", "Finish")
+    assert has_element?(view, "#book-#{in_progress.id}-abandon", "Abandon")
+    refute has_element?(view, "#book-#{in_progress.id}-start")
+
+    assert has_element?(view, "#book-#{finished.id}-reopen", "Reopen")
+    assert has_element?(view, "#book-#{abandoned.id}-reopen", "Reopen")
+  end
+
+  test "updates book status and dashboard summaries without leaving the page", %{conn: conn} do
+    reading_log = Library.create_reading_log!("Spanish", "es", 100_000)
+
+    book =
+      Library.add_book!(reading_log.id, "Hola", %{
+        estimated_words: 20_000
+      })
+
+    {:ok, view, _html} = live(conn, ~p"/")
+
+    view |> element("#book-#{book.id}-start") |> render_click()
+    assert has_element?(view, "#books-in_progress #book-#{book.id}")
+    assert has_element?(view, "#summary-books-in-progress", "1")
+
+    view |> element("#book-#{book.id}-finish") |> render_click()
+    assert has_element?(view, "#books-finished #book-#{book.id}")
+    assert has_element?(view, "#summary-books-finished", "1")
+    assert has_element?(view, "#summary-books-in-progress", "0")
+    assert has_element?(view, "#words-completed", "20,000")
+    assert has_element?(view, "#goal-progress", "20%")
+
+    view |> element("#book-#{book.id}-reopen") |> render_click()
+    assert has_element?(view, "#books-in_progress #book-#{book.id}")
+    assert has_element?(view, "#summary-books-finished", "0")
+
+    view |> element("#book-#{book.id}-abandon") |> render_click()
+    assert has_element?(view, "#books-abandoned #book-#{book.id}")
+    assert has_element?(view, "#book-#{book.id}-reopen", "Reopen")
+  end
 end

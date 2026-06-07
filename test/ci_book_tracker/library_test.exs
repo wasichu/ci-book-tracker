@@ -85,6 +85,27 @@ defmodule CiBookTracker.LibraryTest do
       assert abandoned.status == :abandoned
       assert is_nil(abandoned.finished_on)
     end
+
+    test "starting and reopening preserve the original start date" do
+      original_started_on = Date.add(Date.utc_today(), -7)
+
+      book =
+        create_reading_log()
+        |> then(&Library.add_book!(&1.id, "L'Etranger"))
+        |> Ash.Changeset.for_update(:edit)
+        |> Ash.Changeset.force_change_attribute(:started_on, original_started_on)
+        |> Ash.update!()
+
+      started = Library.start_book!(book)
+      assert started.started_on == original_started_on
+
+      reopened =
+        started
+        |> Library.finish_book!()
+        |> Library.reopen_book!()
+
+      assert reopened.started_on == original_started_on
+    end
   end
 
   defp create_reading_log do

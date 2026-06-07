@@ -23,6 +23,25 @@ defmodule CiBookTrackerWeb.HomeLive do
   end
 
   @impl true
+  def handle_event(
+        "update_status",
+        %{"action" => action, "book_id" => book_id},
+        socket
+      )
+      when action in ~w(start finish abandon reopen) do
+    with %{} = book <- find_book(socket.assigns.books_by_status, book_id),
+         {:ok, updated_book} <- update_book_status(book, action) do
+      {:noreply,
+       socket
+       |> put_flash(:info, status_message(updated_book, action))
+       |> assign_dashboard(socket.assigns.reading_log)}
+    else
+      _error ->
+        {:noreply, put_flash(socket, :error, "We couldn't update this book. Try again.")}
+    end
+  end
+
+  @impl true
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
@@ -238,8 +257,50 @@ defmodule CiBookTrackerWeb.HomeLive do
           {format_number(@book.estimated_words)} words
         </span>
       </div>
+
+      <div
+        class="mt-5 grid grid-cols-2 gap-2 border-t border-slate-100 pt-4"
+        aria-label={"Status actions for #{@book.title}"}
+      >
+        <button
+          :for={{action, label, icon, button_class} <- status_actions(@book.status)}
+          id={"book-#{@book.id}-#{action}"}
+          type="button"
+          phx-click="update_status"
+          phx-value-action={action}
+          phx-value-book_id={@book.id}
+          phx-disable-with={"#{label}..."}
+          class={[
+            "inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60",
+            button_class
+          ]}
+        >
+          <.icon name={icon} class="size-4" /> {label}
+        </button>
+      </div>
     </article>
     """
+  end
+
+  defp status_actions(:want_to_read) do
+    [
+      {"start", "Start", "hero-play", "bg-sky-700 text-white hover:bg-sky-800"},
+      {"finish", "Finish", "hero-check", "bg-emerald-700 text-white hover:bg-emerald-800"}
+    ]
+  end
+
+  defp status_actions(:in_progress) do
+    [
+      {"finish", "Finish", "hero-check", "bg-emerald-700 text-white hover:bg-emerald-800"},
+      {"abandon", "Abandon", "hero-archive-box", "bg-slate-200 text-slate-800 hover:bg-slate-300"}
+    ]
+  end
+
+  defp status_actions(status) when status in [:finished, :abandoned] do
+    [
+      {"reopen", "Reopen", "hero-arrow-path",
+       "col-span-2 bg-slate-900 text-white hover:bg-amber-800"}
+    ]
   end
 
   defp assign_dashboard(socket, nil) do
@@ -299,6 +360,23 @@ defmodule CiBookTrackerWeb.HomeLive do
   defp empty_books_by_status do
     Map.new(@status_groups, fn {status, _label, _icon, _class} -> {status, []} end)
   end
+
+  defp find_book(books_by_status, book_id) do
+    books_by_status
+    |> Map.values()
+    |> List.flatten()
+    |> Enum.find(&(&1.id == book_id))
+  end
+
+  defp update_book_status(book, "start"), do: Library.start_book(book)
+  defp update_book_status(book, "finish"), do: Library.finish_book(book)
+  defp update_book_status(book, "abandon"), do: Library.abandon_book(book)
+  defp update_book_status(book, "reopen"), do: Library.reopen_book(book)
+
+  defp status_message(book, "start"), do: "Started #{book.title}."
+  defp status_message(book, "finish"), do: "Finished #{book.title}."
+  defp status_message(book, "abandon"), do: "Moved #{book.title} to abandoned."
+  defp status_message(book, "reopen"), do: "Reopened #{book.title}."
 
   defp format_number(number) do
     number
