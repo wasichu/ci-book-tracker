@@ -8,7 +8,8 @@ defmodule CiBookTrackerWeb.ReadingLogLive.New do
     "name" => "",
     "language_code" => "es",
     "goal_amount" => "",
-    "goal_unit" => "thousand"
+    "goal_unit" => "thousand",
+    "auto_open" => "false"
   }
 
   @goal_units [
@@ -19,19 +20,12 @@ defmodule CiBookTrackerWeb.ReadingLogLive.New do
 
   @impl true
   def mount(_params, _session, socket) do
-    if Library.list_reading_logs!(query: [limit: 1]) == [] do
-      {:ok,
-       socket
-       |> assign(:page_title, "Create reading log")
-       |> assign(:language_options, ReadingLogFormat.language_options())
-       |> assign(:goal_units, @goal_units)
-       |> assign(:form, to_form(@empty_params, as: :reading_log))}
-    else
-      {:ok,
-       socket
-       |> put_flash(:info, "Your reading log is ready.")
-       |> push_navigate(to: ~p"/")}
-    end
+    {:ok,
+     socket
+     |> assign(:page_title, "Create reading log")
+     |> assign(:language_options, ReadingLogFormat.language_options())
+     |> assign(:goal_units, @goal_units)
+     |> assign(:form, to_form(@empty_params, as: :reading_log))}
   end
 
   @impl true
@@ -133,6 +127,17 @@ defmodule CiBookTrackerWeb.ReadingLogLive.New do
             </div>
           </div>
 
+          <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+            <.input
+              field={@form[:auto_open]}
+              type="checkbox"
+              label="Automatically open this log next time"
+            />
+            <p class="-mt-2 pl-7 text-xs leading-5 text-slate-500">
+              You can always use Switch Log from the dashboard to choose another shelf.
+            </p>
+          </div>
+
           <div class="border-t border-slate-100 pt-6">
             <.button
               id="save-reading-log"
@@ -160,7 +165,9 @@ defmodule CiBookTrackerWeb.ReadingLogLive.New do
         {:noreply,
          socket
          |> put_flash(:info, "#{reading_log.name} is ready.")
-         |> push_navigate(to: ~p"/")}
+         |> redirect(
+           to: ~p"/reading-logs/#{reading_log.id}/open?#{[auto_open: params["auto_open"]]}"
+         )}
 
       {:error, _error} ->
         {:noreply,

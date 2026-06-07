@@ -19,6 +19,7 @@ defmodule CiBookTrackerWeb.ReadingLogLive.NewTest do
     assert has_element?(view, "label", "Goal amount")
     assert has_element?(view, "label", "Unit")
     assert has_element?(view, "#reading_log_goal_unit option[value='million']", "Million words")
+    assert has_element?(view, "label", "Automatically open this log next time")
     assert has_element?(view, "#save-reading-log", "Create Reading Log")
   end
 
@@ -41,7 +42,7 @@ defmodule CiBookTrackerWeb.ReadingLogLive.NewTest do
     assert Library.list_reading_logs!() == []
   end
 
-  test "creates a reading log without a word goal and returns to the dashboard", %{conn: conn} do
+  test "creates a reading log and redirects through the session opener", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/reading-logs/new")
 
     result =
@@ -51,21 +52,18 @@ defmodule CiBookTrackerWeb.ReadingLogLive.NewTest do
           name: "Spanish novels",
           language_code: "es",
           goal_amount: "",
-          goal_unit: "thousand"
+          goal_unit: "thousand",
+          auto_open: "false"
         }
       )
       |> render_submit()
 
-    assert {:error, {:live_redirect, %{to: "/"}}} = result
-
     [reading_log] = Library.list_reading_logs!()
+    assert {:error, {:redirect, %{to: path}}} = result
+    assert path == "/reading-logs/#{reading_log.id}/open?auto_open=false"
     assert reading_log.name == "Spanish novels"
     assert reading_log.language_code == "es"
     assert is_nil(reading_log.word_goal)
-
-    {:ok, dashboard, html} = follow_redirect(result, conn)
-    assert html =~ "Spanish novels is ready."
-    assert has_element?(dashboard, "#dashboard", "Spanish novels")
   end
 
   test "converts a thousand-word goal to the stored integer", %{conn: conn} do
@@ -83,7 +81,7 @@ defmodule CiBookTrackerWeb.ReadingLogLive.NewTest do
       )
       |> render_submit()
 
-    assert {:error, {:live_redirect, %{to: "/"}}} = result
+    assert {:error, {:redirect, %{}}} = result
     assert [%{word_goal: 500_000}] = Library.list_reading_logs!()
   end
 
@@ -102,7 +100,7 @@ defmodule CiBookTrackerWeb.ReadingLogLive.NewTest do
       )
       |> render_submit()
 
-    assert {:error, {:live_redirect, %{to: "/"}}} = result
+    assert {:error, {:redirect, %{}}} = result
     assert [%{language_code: "fr", word_goal: 1_500_000}] = Library.list_reading_logs!()
   end
 
@@ -125,9 +123,24 @@ defmodule CiBookTrackerWeb.ReadingLogLive.NewTest do
     assert Library.list_reading_logs!() == []
   end
 
-  test "redirects to the dashboard when a reading log already exists", %{conn: conn} do
+  test "allows creating another reading log", %{conn: conn} do
     Library.create_reading_log!("Spanish", "es", 50_000)
 
-    assert {:error, {:live_redirect, %{to: "/"}}} = live(conn, ~p"/reading-logs/new")
+    {:ok, view, _html} = live(conn, ~p"/reading-logs/new")
+
+    view
+    |> form("#create-reading-log-form",
+      reading_log: %{
+        name: "French",
+        language_code: "fr",
+        goal_amount: "",
+        goal_unit: "words",
+        auto_open: "true"
+      }
+    )
+    |> render_submit()
+
+    assert Enum.map(Library.list_reading_logs!(), & &1.name) |> Enum.sort() ==
+             ["French", "Spanish"]
   end
 end

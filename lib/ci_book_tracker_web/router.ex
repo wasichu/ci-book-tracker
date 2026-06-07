@@ -18,8 +18,12 @@ defmodule CiBookTrackerWeb.Router do
     pipe_through :browser
 
     live "/", HomeLive, :index
+    live "/dashboard", DashboardLive, :index
     live "/reading-logs/new", ReadingLogLive.New, :new
     live "/books/new", BookLive.New, :new
+
+    get "/reading-logs/:id/open", ReadingLogSessionController, :open
+    delete "/reading-log-session", ReadingLogSessionController, :switch
   end
 
   # Other scopes may use custom stacks.

@@ -10,7 +10,7 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
   end
 
   test "shows a phone-friendly add book form", %{conn: conn} do
-    create_reading_log()
+    {conn, _reading_log} = create_reading_log(conn)
 
     {:ok, view, _html} = live(conn, ~p"/books/new")
 
@@ -36,7 +36,7 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
   end
 
   test "shows a read-only formatted total calculated from page count", %{conn: conn} do
-    create_reading_log()
+    {conn, _reading_log} = create_reading_log(conn)
     {:ok, view, _html} = live(conn, ~p"/books/new")
 
     view
@@ -50,7 +50,7 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
   end
 
   test "page count overrides a conflicting manual estimate", %{conn: conn} do
-    create_reading_log()
+    {conn, _reading_log} = create_reading_log(conn)
     {:ok, view, _html} = live(conn, ~p"/books/new")
 
     view
@@ -62,7 +62,7 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
   end
 
   test "allows a manual total when page count is blank", %{conn: conn} do
-    create_reading_log()
+    {conn, _reading_log} = create_reading_log(conn)
     {:ok, view, _html} = live(conn, ~p"/books/new")
 
     view
@@ -74,7 +74,7 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
   end
 
   test "clears a calculated total when page count is removed", %{conn: conn} do
-    create_reading_log()
+    {conn, _reading_log} = create_reading_log(conn)
     {:ok, view, _html} = live(conn, ~p"/books/new")
 
     view
@@ -96,7 +96,7 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
   end
 
   test "shows a validation error when title is blank", %{conn: conn} do
-    create_reading_log()
+    {conn, _reading_log} = create_reading_log(conn)
     {:ok, view, _html} = live(conn, ~p"/books/new")
 
     html =
@@ -109,7 +109,7 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
   end
 
   test "saves a book, returns to the dashboard, and shows feedback", %{conn: conn} do
-    reading_log = create_reading_log()
+    {conn, reading_log} = create_reading_log(conn)
     {:ok, view, _html} = live(conn, ~p"/books/new")
 
     result =
@@ -129,7 +129,7 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
       )
       |> render_submit()
 
-    assert {:error, {:live_redirect, %{to: "/"}}} = result
+    assert {:error, {:live_redirect, %{to: "/dashboard"}}} = result
 
     [book] =
       Library.list_books!(
@@ -148,7 +148,7 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
   end
 
   test "adds an in-progress book with a default start date", %{conn: conn} do
-    reading_log = create_reading_log()
+    {conn, reading_log} = create_reading_log(conn)
     {:ok, view, _html} = live(conn, ~p"/books/new")
 
     result =
@@ -176,7 +176,7 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
   end
 
   test "adds a finished book with default dates and completed-word stats", %{conn: conn} do
-    reading_log = create_reading_log()
+    {conn, reading_log} = create_reading_log(conn)
     {:ok, view, _html} = live(conn, ~p"/books/new")
 
     result =
@@ -208,7 +208,7 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
   end
 
   test "adds an abandoned book with explicitly supplied dates", %{conn: conn} do
-    reading_log = create_reading_log()
+    {conn, reading_log} = create_reading_log(conn)
     {:ok, view, _html} = live(conn, ~p"/books/new")
 
     result =
@@ -236,7 +236,24 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     assert has_element?(dashboard, "#books-abandoned #book-#{book.id}")
   end
 
-  defp create_reading_log do
-    Library.create_reading_log!("French", "fr", 100_000)
+  test "adds books only to the active reading log", %{conn: conn} do
+    inactive_log = Library.create_reading_log!("Spanish", "es", 50_000)
+    {conn, active_log} = create_reading_log(conn)
+    {:ok, view, _html} = live(conn, ~p"/books/new")
+
+    view
+    |> form("#add-book-form", book: %{title: "Active shelf book"})
+    |> render_submit()
+
+    assert [%{title: "Active shelf book"}] =
+             Library.list_books!(query: [filter: [reading_log_id: active_log.id]])
+
+    assert Library.list_books!(query: [filter: [reading_log_id: inactive_log.id]]) == []
+  end
+
+  defp create_reading_log(conn) do
+    reading_log = Library.create_reading_log!("French", "fr", 100_000)
+    conn = init_test_session(conn, %{"active_reading_log_id" => reading_log.id})
+    {conn, reading_log}
   end
 end

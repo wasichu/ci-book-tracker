@@ -24,10 +24,8 @@ defmodule CiBookTrackerWeb.BookLive.New do
   ]
 
   @impl true
-  def mount(_params, _session, socket) do
-    reading_log =
-      Library.list_reading_logs!(query: [sort: [inserted_at: :asc], limit: 1])
-      |> List.first()
+  def mount(_params, session, socket) do
+    reading_log = active_reading_log(session)
 
     if reading_log do
       {:ok,
@@ -77,7 +75,7 @@ defmodule CiBookTrackerWeb.BookLive.New do
       <section id="add-book-page" class="space-y-7">
         <header>
           <.link
-            navigate={~p"/"}
+            navigate={~p"/dashboard"}
             class="inline-flex min-h-11 items-center gap-2 rounded-xl pr-3 text-sm font-semibold text-slate-600 transition hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
           >
             <.icon name="hero-arrow-left" class="size-4" /> Back to dashboard
@@ -173,7 +171,7 @@ defmodule CiBookTrackerWeb.BookLive.New do
           <.input
             field={@form[:difficulty_label]}
             label="Difficulty"
-            placeholder="Beginner, intermediate, advanced..."
+            placeholder="Beginner, intermediate, advanced, A1, B2, ..."
             autocomplete="off"
           />
 
@@ -235,7 +233,7 @@ defmodule CiBookTrackerWeb.BookLive.New do
         {:noreply,
          socket
          |> put_flash(:info, "#{book.title} was added to your reading log.")
-         |> push_navigate(to: ~p"/")}
+         |> push_navigate(to: ~p"/dashboard")}
 
       {:error, _error} ->
         {:noreply,
@@ -304,6 +302,15 @@ defmodule CiBookTrackerWeb.BookLive.New do
   defp empty_to_nil(value), do: value
 
   defp blank?(value), do: value in [nil, ""]
+
+  defp active_reading_log(session) do
+    id = session["active_reading_log_id"] || session["auto_open_reading_log_id"]
+
+    case id && Library.get_reading_log(id) do
+      {:ok, reading_log} -> reading_log
+      _missing -> nil
+    end
+  end
 
   defp format_number(value) when is_binary(value) do
     case Integer.parse(value) do
