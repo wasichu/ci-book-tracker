@@ -18,6 +18,7 @@ defmodule CiBookTrackerWeb.Router do
     pipe_through :browser
 
     live "/", HomeLive, :index
+    live "/reading-logs/new", ReadingLogLive.New, :new
     live "/books/new", BookLive.New, :new
   end
 

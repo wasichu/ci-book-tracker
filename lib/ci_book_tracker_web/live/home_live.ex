@@ -23,11 +23,6 @@ defmodule CiBookTrackerWeb.HomeLive do
   end
 
   @impl true
-  def handle_event("create_reading_log", _params, socket) do
-    {:noreply, put_flash(socket, :info, "Reading log setup is the next feature.")}
-  end
-
-  @impl true
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
@@ -50,7 +45,7 @@ defmodule CiBookTrackerWeb.HomeLive do
 
         <.button
           id="create-reading-log"
-          phx-click="create_reading_log"
+          navigate={~p"/reading-logs/new"}
           variant="primary"
           class="flex min-h-16 w-full items-center justify-center gap-3 rounded-2xl bg-amber-700 px-6 text-base font-semibold text-white shadow-lg shadow-amber-900/15 transition hover:-translate-y-0.5 hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0"
         >
@@ -68,8 +63,11 @@ defmodule CiBookTrackerWeb.HomeLive do
           <h1 class="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
             {@reading_log.name}
           </h1>
-          <p class="text-base leading-7 text-slate-600">
+          <p :if={@reading_log.word_goal} class="text-base leading-7 text-slate-600">
             Keep moving toward your {format_number(@reading_log.word_goal)} word goal.
+          </p>
+          <p :if={is_nil(@reading_log.word_goal)} class="text-base leading-7 text-slate-600">
+            Build your reading habit one book at a time.
           </p>
         </header>
 
@@ -97,6 +95,7 @@ defmodule CiBookTrackerWeb.HomeLive do
           />
 
           <article
+            :if={@reading_log.word_goal}
             id="goal-progress"
             class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/50"
           >
@@ -284,9 +283,14 @@ defmodule CiBookTrackerWeb.HomeLive do
       books_finished: books_finished,
       books_in_progress: books_in_progress,
       words_completed: words_completed,
-      goal_progress: min(round(words_completed / word_goal * 100), 100)
+      goal_progress: goal_progress(words_completed, word_goal)
     }
   end
+
+  defp goal_progress(_words_completed, nil), do: 0
+
+  defp goal_progress(words_completed, word_goal),
+    do: min(round(words_completed / word_goal * 100), 100)
 
   defp empty_summary do
     %{books_finished: 0, books_in_progress: 0, words_completed: 0, goal_progress: 0}

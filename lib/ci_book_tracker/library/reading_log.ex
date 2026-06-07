@@ -27,11 +27,12 @@ defmodule CiBookTracker.Library.ReadingLog do
 
     attribute :language_code, :string do
       allow_nil? false
+      default "es"
       public? true
     end
 
     attribute :word_goal, :integer do
-      allow_nil? false
+      allow_nil? true
       public? true
       constraints min: 1
     end

@@ -30,6 +30,13 @@ defmodule CiBookTracker.LibraryTest do
       end
     end
 
+    test "creates a reading log without a word goal" do
+      reading_log = Library.create_reading_log!("Spanish", "es", nil)
+
+      assert reading_log.language_code == "es"
+      assert is_nil(reading_log.word_goal)
+    end
+
     test "edits descriptive book fields" do
       book =
         create_reading_log()

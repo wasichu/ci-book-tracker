@@ -12,8 +12,7 @@ defmodule CiBookTrackerWeb.HomeLiveTest do
     assert has_element?(view, "#create-reading-log", "Create Reading Log")
     refute has_element?(view, "#dashboard")
 
-    view |> element("#create-reading-log") |> render_click()
-    assert render(view) =~ "Reading log setup is the next feature."
+    assert has_element?(view, "#create-reading-log[href='/reading-logs/new']")
   end
 
   test "shows dashboard summaries and books grouped by status", %{conn: conn} do
@@ -69,5 +68,14 @@ defmodule CiBookTrackerWeb.HomeLiveTest do
     for status <- ~w(in_progress want_to_read finished abandoned) do
       assert has_element?(view, "#books-#{status}", "No books here yet.")
     end
+  end
+
+  test "shows a dashboard without goal progress when the word goal is unset", %{conn: conn} do
+    Library.create_reading_log!("Spanish", "es", nil)
+
+    {:ok, view, _html} = live(conn, ~p"/")
+
+    assert has_element?(view, "#dashboard", "Build your reading habit one book at a time.")
+    refute has_element?(view, "#goal-progress")
   end
 end
