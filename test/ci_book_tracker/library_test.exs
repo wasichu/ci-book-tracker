@@ -19,6 +19,9 @@ defmodule CiBookTracker.LibraryTest do
       assert book.added_on == Date.utc_today()
       assert is_nil(book.page_count)
       assert is_nil(book.estimated_words)
+      assert is_nil(book.cover_url)
+      assert is_nil(book.cover_provider)
+      assert is_nil(book.cover_id)
       assert is_nil(book.notes)
     end
 
@@ -35,6 +38,24 @@ defmodule CiBookTracker.LibraryTest do
 
       assert reading_log.language_code == "es"
       assert is_nil(reading_log.word_goal)
+    end
+
+    test "edits a reading log without changing its id or books" do
+      reading_log = create_reading_log()
+      book = Library.add_book!(reading_log.id, "The Little Prince")
+
+      updated =
+        Library.edit_reading_log!(reading_log, %{
+          name: "French classics",
+          language_code: "fr",
+          word_goal: 250_000
+        })
+
+      assert updated.id == reading_log.id
+      assert updated.name == "French classics"
+      assert updated.language_code == "fr"
+      assert updated.word_goal == 250_000
+      assert Library.get_book!(book.id).reading_log_id == reading_log.id
     end
 
     test "defaults reading dates from the initial status" do
@@ -94,6 +115,9 @@ defmodule CiBookTracker.LibraryTest do
           author: "Antoine de Saint-Exupery",
           page_count: 96,
           estimated_words: 16_000,
+          cover_url: "https://covers.openlibrary.org/b/id/123-M.jpg",
+          cover_provider: "open_library",
+          cover_id: 123,
           difficulty_label: "Intermediate",
           notes: "Read one chapter each day."
         })
@@ -101,6 +125,9 @@ defmodule CiBookTracker.LibraryTest do
       assert edited.author == "Antoine de Saint-Exupery"
       assert edited.page_count == 96
       assert edited.estimated_words == 16_000
+      assert edited.cover_url == "https://covers.openlibrary.org/b/id/123-M.jpg"
+      assert edited.cover_provider == "open_library"
+      assert edited.cover_id == 123
       assert edited.difficulty_label == "Intermediate"
       assert edited.notes == "Read one chapter each day."
     end

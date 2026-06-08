@@ -35,6 +35,13 @@ defmodule CiBookTrackerWeb.DashboardLiveTest do
     assert has_element?(view, "#books-finished #book-#{finished.id}", "Le Petit Prince")
     refute has_element?(view, "#book-#{other_book.id}")
     assert has_element?(view, "#switch-reading-log", "Switch Log")
+
+    assert has_element?(
+             view,
+             "#edit-reading-log[href='/reading-logs/#{reading_log.id}/edit?from=dashboard']",
+             "Log Settings"
+           )
+
     assert html =~ "Antoine de Saint-Exupery"
     assert html =~ "Intermediate"
     assert html =~ "96 pages"
@@ -52,6 +59,62 @@ defmodule CiBookTrackerWeb.DashboardLiveTest do
     for status <- ~w(in_progress want_to_read finished abandoned) do
       assert has_element?(view, "#books-#{status}", "No books here yet.")
     end
+  end
+
+  test "shows small covers and placeholders without changing card layout", %{conn: conn} do
+    reading_log = Library.create_reading_log!("Spanish", "es", nil)
+
+    covered =
+      Library.add_book!(reading_log.id, "Covered book", %{
+        cover_provider: "open_library",
+        cover_id: 456,
+        cover_url: "https://covers.openlibrary.org/b/id/456-M.jpg"
+      })
+
+    uncovered = Library.add_book!(reading_log.id, "Manual book")
+
+    {:ok, view, _html} = live(active_log(conn, reading_log), ~p"/dashboard")
+
+    assert has_element?(
+             view,
+             "#book-#{covered.id}-cover img[src='https://covers.openlibrary.org/b/id/456-S.jpg'][alt='Cover of Covered book']"
+           )
+
+    assert has_element?(view, "#book-#{uncovered.id}-cover .hero-book-open")
+    refute has_element?(view, "#book-#{uncovered.id}-cover img")
+  end
+
+  test "orders completed words after finished books and totals pages in progress", %{conn: conn} do
+    reading_log = Library.create_reading_log!("Spanish", "es", nil)
+
+    reading_log.id
+    |> Library.add_book!("First active book", %{page_count: 120})
+    |> Library.start_book!()
+
+    reading_log.id
+    |> Library.add_book!("Second active book", %{page_count: 80})
+    |> Library.start_book!()
+
+    conn = active_log(conn, reading_log)
+    {:ok, view, html} = live(conn, ~p"/dashboard")
+
+    assert has_element?(view, "#summary-books-in-progress", "200 pages in progress")
+
+    {finished_position, _length} = :binary.match(html, ~s(id="summary-books-finished"))
+    {words_position, _length} = :binary.match(html, ~s(id="words-completed"))
+    {in_progress_position, _length} = :binary.match(html, ~s(id="summary-books-in-progress"))
+
+    assert finished_position < words_position
+    assert words_position < in_progress_position
+  end
+
+  test "notes when active books do not have page counts", %{conn: conn} do
+    reading_log = Library.create_reading_log!("Spanish", "es", nil)
+    reading_log.id |> Library.add_book!("Active book") |> Library.start_book!()
+
+    {:ok, view, _html} = live(active_log(conn, reading_log), ~p"/dashboard")
+
+    assert has_element?(view, "#summary-books-in-progress", "Page count not set")
   end
 
   test "shows the status controls appropriate for each book", %{conn: conn} do
@@ -91,6 +154,81 @@ defmodule CiBookTrackerWeb.DashboardLiveTest do
     view |> element("#book-#{book.id}-reopen") |> render_click()
     view |> element("#book-#{book.id}-abandon") |> render_click()
     assert has_element?(view, "#books-abandoned #book-#{book.id}")
+  end
+
+  test "searches books by title and author without a page reload", %{conn: conn} do
+    reading_log = Library.create_reading_log!("Spanish", "es", nil)
+
+    title_match =
+      Library.add_book!(reading_log.id, "Cien Anos de Soledad", %{
+        author: "Gabriel Garcia Marquez"
+      })
+
+    author_match =
+      Library.add_book!(reading_log.id, "La Casa", %{author: "ISABEL ALLENDE"})
+
+    hidden = Library.add_book!(reading_log.id, "El Principito", %{author: "Antoine"})
+
+    {:ok, view, _html} = live(active_log(conn, reading_log), ~p"/dashboard")
+
+    view
+    |> form("#book-search-form", search: %{query: "soledad"})
+    |> render_change()
+
+    assert has_element?(view, "#book-#{title_match.id}")
+    refute has_element?(view, "#book-#{author_match.id}")
+    refute has_element?(view, "#book-#{hidden.id}")
+
+    view
+    |> form("#book-search-form", search: %{query: "isabel"})
+    |> render_change()
+
+    assert has_element?(view, "#book-#{author_match.id}")
+    refute has_element?(view, "#book-#{title_match.id}")
+    refute has_element?(view, "#book-#{hidden.id}")
+  end
+
+  test "combines status filters with search", %{conn: conn} do
+    reading_log = Library.create_reading_log!("Spanish", "es", nil)
+
+    wanted = Library.add_book!(reading_log.id, "Spanish Stories")
+
+    reading =
+      reading_log.id
+      |> Library.add_book!("More Spanish Stories")
+      |> Library.start_book!()
+
+    hidden = Library.add_book!(reading_log.id, "French Stories")
+
+    {:ok, view, _html} = live(active_log(conn, reading_log), ~p"/dashboard")
+
+    view
+    |> form("#book-search-form", search: %{query: "spanish"})
+    |> render_change()
+
+    view
+    |> element("#filter-in_progress")
+    |> render_click()
+
+    assert has_element?(view, "#filter-in_progress.bg-slate-950")
+    assert has_element?(view, "#books-in_progress #book-#{reading.id}")
+    refute has_element?(view, "#book-#{wanted.id}")
+    refute has_element?(view, "#book-#{hidden.id}")
+    refute has_element?(view, "#books-want_to_read")
+  end
+
+  test "shows a friendly empty state when no books match", %{conn: conn} do
+    reading_log = Library.create_reading_log!("Spanish", "es", nil)
+    Library.add_book!(reading_log.id, "El Principito")
+
+    {:ok, view, _html} = live(active_log(conn, reading_log), ~p"/dashboard")
+
+    view
+    |> form("#book-search-form", search: %{query: "missing"})
+    |> render_change()
+
+    assert has_element?(view, "#no-matching-books", "No books match this search.")
+    refute has_element?(view, "#books-want_to_read")
   end
 
   defp active_log(conn, reading_log) do

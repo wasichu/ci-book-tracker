@@ -121,6 +121,67 @@ defmodule CiBookTrackerWeb.CoreComponents do
   end
 
   @doc """
+  Renders a remote book cover or a stable placeholder.
+  """
+  attr :id, :string, default: nil
+  attr :title, :string, required: true
+  attr :cover_url, :string, default: nil
+  attr :cover_provider, :string, default: nil
+  attr :cover_id, :integer, default: nil
+  attr :size, :atom, values: [:thumbnail, :detail], default: :thumbnail
+  attr :class, :string, default: nil
+
+  def book_cover(assigns) do
+    assigns =
+      assigns
+      |> assign(:src, cover_src(assigns))
+      |> assign(:size_class, cover_size_class(assigns.size))
+
+    ~H"""
+    <div
+      id={@id}
+      class={[
+        "relative shrink-0 overflow-hidden rounded-xl bg-slate-100 ring-1 ring-slate-200",
+        @size_class,
+        @class
+      ]}
+    >
+      <img
+        :if={@src}
+        src={@src}
+        alt={"Cover of #{@title}"}
+        loading="lazy"
+        class="size-full object-cover"
+      />
+      <div
+        :if={is_nil(@src)}
+        aria-hidden="true"
+        class="grid size-full place-items-center bg-gradient-to-br from-slate-100 to-amber-50 text-slate-400"
+      >
+        <.icon
+          name="hero-book-open"
+          class={if @size == :detail, do: "size-12", else: "size-7"}
+        />
+      </div>
+    </div>
+    """
+  end
+
+  defp cover_src(%{cover_provider: "open_library", cover_id: cover_id, size: size})
+       when is_integer(cover_id) do
+    suffix = if size == :detail, do: "M", else: "S"
+    "https://covers.openlibrary.org/b/id/#{cover_id}-#{suffix}.jpg"
+  end
+
+  defp cover_src(%{cover_url: cover_url}) when is_binary(cover_url) and cover_url != "",
+    do: cover_url
+
+  defp cover_src(_assigns), do: nil
+
+  defp cover_size_class(:thumbnail), do: "h-28 w-[4.6rem]"
+  defp cover_size_class(:detail), do: "aspect-[2/3] w-36 sm:w-44"
+
+  @doc """
   Renders an input with label and error messages.
 
   A `Phoenix.HTML.FormField` may be passed as argument,

@@ -1,55 +1,115 @@
-# Comprehensible Input Reading Log
+# CI Book Tracker
 
-A mobile-first, local-first reading tracker for language learners using
-comprehensible input. Comprehensible Input Reading Log keeps separate language
-shelves, tracks book progress and estimated word totals, and stores everything
-in a local SQLite database.
+CI Book Tracker is a local-first reading tracker for language learners. It
+organizes books into language-specific reading logs, tracks reading goals and
+estimated words read, and keeps the data in a local SQLite database.
 
-The project favors manual entry, simple workflows, and device-local ownership
-over accounts, cloud sync, social features, or external metadata dependencies.
+Manual entry works fully offline. Internet access is only needed for optional
+book metadata and cover lookups.
+
+## Why This Project Exists
+
+Reading a large amount of understandable, interesting material can be a useful
+part of learning a language. CI Book Tracker provides a simple way to keep a
+personal record of that work without requiring an account or cloud service.
+
+The application helps readers:
+
+- Record books they want to read, are reading, or have completed
+- Estimate the number of words they have read
+- Set long-term reading goals for each language
+- Review their progress over time
+- Keep their reading history in a portable, user-owned database
+
+## Extensive Reading and Comprehensible Input
+
+Extensive reading generally means reading large quantities of relatively easy
+and interesting material for meaning and enjoyment, rather than stopping to
+study every unfamiliar detail. Many language learners use extensive reading as
+one part of a comprehensible input approach to language acquisition.
+
+These ideas inspired the project, but the application is simply a tracking
+tool; it does not attempt to prove a particular theory of language learning.
+
+Further background:
+
+- [What is Extensive Reading?](https://erfoundation.org/wordpress/what_is/) from
+  the Extensive Reading Foundation
+- [Project inspiration video](https://www.youtube.com/watch?v=OheGJ2geFnA)
 
 ## Features
 
-- Create multiple reading logs for different languages
-- Optionally set an estimated-word goal for each log
-- Add and edit books with:
-  - title and author
-  - page count and estimated total words
-  - difficulty
-  - reading status
-  - started and finished dates
-  - notes
-- Move books through `Want to read`, `In progress`, `Finished`, and `Abandoned`
-- View dashboard totals for completed books, active books, completed words, and
-  goal progress
-- Open a detailed book view with lifecycle actions
-- Delete individual books or entire reading logs with confirmation
-- Keep the active reading log in the browser session
-- Store application data outside the source repository
+- Multiple language-specific reading logs
+- Editable reading goals and estimated words-read totals
+- Add, edit, view, and delete books
+- Book status workflow:
+  - Want to Read
+  - In Progress
+  - Finished
+  - Abandoned
+- Search and filtering within a reading log
+- Optional metadata lookup and metadata refresh
+- Optional cover lookup
+- Bulk book import from CSV
+- Sample-based word count estimator
+- Local SQLite storage
+- Database export and restore
+- Settings page with metadata provider configuration
 
-The interface is designed for phones first and uses Phoenix LiveView for
-server-rendered interaction.
+## Metadata Providers
 
-## Technology
+CI Book Tracker can search these optional providers:
 
-- Elixir `~> 1.15`
+- [Open Library](https://openlibrary.org/)
+- [Google Books](https://books.google.com/)
+- [Hardcover](https://hardcover.app/)
+
+Open Library can be used without configuration. Google Books and Hardcover can
+use credentials configured on the Settings page or through environment
+variables. Availability and result quality depend on the provider.
+
+Metadata lookup is an enhancement, not a requirement. Books can always be
+entered and edited manually, and the rest of the application remains useful
+without internet access.
+
+## Philosophy
+
+- Local-first and offline-capable
+- No accounts
+- No cloud dependency
+- User-owned data
+- Portable SQLite storage
+- Manual entry as a first-class workflow
+- Metadata as an optional convenience
+
+See [`docs/prompts/00_philosophy.md`](docs/prompts/00_philosophy.md) for the
+original project philosophy.
+
+## Screenshots
+
+### Reading Log Selection
+
+![Reading log selection](docs/screenshots/home.png)
+
+### Reading Dashboard
+
+![Spanish reading dashboard](docs/screenshots/dashboard.png)
+
+### Book Details
+
+![Book details for a finished Spanish reader](docs/screenshots/book-details.png)
+
+## Development
+
+Requirements:
+
+- Elixir 1.15 or later
+- Erlang/OTP supported by the installed Elixir version
 - Phoenix 1.8
-- Phoenix LiveView 1.1
-- Ash 3
-- AshSQLite and Ecto
-- SQLite
-- Tailwind CSS 4
-- Bandit
-
-## Getting Started
-
-Prerequisites:
-
-- Elixir and Erlang/OTP
 - SQLite development support required by `exqlite`
 - Standard build tools for compiling dependencies
 
-Install dependencies, prepare the database, and build assets:
+Install dependencies, prepare the database, and build the assets:
 
 ```sh
 mix setup
@@ -61,18 +121,33 @@ Start the application:
 mix phx.server
 ```
 
-Then visit [http://localhost:4000](http://localhost:4000).
-
-You can also run the server inside IEx:
+Visit [http://localhost:4000](http://localhost:4000). To run the server inside
+IEx instead:
 
 ```sh
 iex -S mix phx.server
 ```
 
-## Local Data
+Run the test suite:
 
-Development and production default to a `reading_log.db` SQLite database in the
-current user's application-data directory:
+```sh
+mix test
+```
+
+Run the complete project check before committing:
+
+```sh
+mix precommit
+```
+
+For a maintainer-oriented overview of the domain, LiveViews, persistence,
+metadata normalization, backup workflows, and final refactor decisions, see
+[`docs/architecture.md`](docs/architecture.md).
+
+## Data Storage
+
+Reading logs, books, provider settings, and other application data are stored
+in a local `reading_log.db` SQLite database:
 
 | Platform | Default directory |
 | --- | --- |
@@ -80,116 +155,45 @@ current user's application-data directory:
 | macOS | `~/Library/Application Support/reading_log/` |
 | Windows | `%APPDATA%/reading_log/` |
 
-The directory is created automatically before the repository connects.
-
-Override the database location with `DATABASE_PATH`:
+Set `DATABASE_PATH` to use a different location:
 
 ```sh
 DATABASE_PATH=/absolute/path/to/reading_log.db mix phx.server
 ```
 
-Test databases are isolated under `tmp/` and are ignored by Git. SQLite
-database files and their journal files are also ignored.
+The Settings page supports downloading a database export and restoring a
+previously exported database. Keep regular backups somewhere separate from the
+device running the application, especially before moving or replacing the
+database file.
 
-### Existing Databases
+## Provider Configuration
 
-Changing `DATABASE_PATH` or moving between the old repository-local setup and
-the application-data directory does not copy existing data automatically. Move
-or copy the SQLite database deliberately if you need to preserve an existing
-library.
+Provider credentials can be entered on the Settings page. They can also be
+provided at startup:
 
-## Development
+| Variable | Purpose |
+| --- | --- |
+| `GOOGLE_BOOKS_API_KEY` | Optional Google Books API key |
+| `HARDCOVER_API_TOKEN` | Optional Hardcover bearer token |
 
-Run the full project check before committing:
-
-```sh
-mix precommit
-```
-
-This compiles with warnings treated as errors, removes unused dependency locks,
-formats the code, prepares the test database, and runs the test suite.
-
-Useful individual commands:
-
-```sh
-mix format
-mix test
-mix assets.build
-```
-
-Database migrations are managed through the normal Ecto/AshSQLite tasks:
-
-```sh
-mix ecto.migrate
-```
-
-## Architecture
-
-The core domain is `CiBookTracker.Library`, with Ash resources for
-`ReadingLog` and `Book`. Business operations are exposed through domain code
-interfaces, including status transitions and deletion.
-
-The primary UI consists of:
-
-- a reading-log selector
-- a dashboard scoped to the active reading log
-- a shared add/edit book form
-- a book detail page
-
-The active reading log is stored in the browser session. There are no user
-accounts or remote synchronization services.
-
-## Metadata Lookup
-
-Manual entry remains the primary workflow. The
-`CiBookTracker.Library.BookMetadata` module is a placeholder boundary for
-possible future integrations with:
-
-- Open Library
-- Hardcover
-- Goodreads imports via Apify
-
-No external metadata API calls are currently implemented.
-
-## Configuration
-
-Common environment variables:
-
-| Variable | Purpose | Default |
-| --- | --- | --- |
-| `DATABASE_PATH` | Absolute SQLite database path | OS application-data path |
-| `PORT` | HTTP port | `4000` in development |
-| `POOL_SIZE` | Production database pool size | `10` |
-| `PHX_HOST` | Production public host | `example.com` |
-| `SECRET_KEY_BASE` | Production cookie/signing secret | Required in production |
-| `PHX_SERVER` | Starts the endpoint in a release | Unset |
-| `DNS_CLUSTER_QUERY` | Optional production DNS clustering query | Unset |
-
-Generate a production secret with:
-
-```sh
-mix phx.gen.secret
-```
+Google Books may allow requests without a key, but unauthenticated quota is not
+guaranteed. Hardcover remains disabled until a token is configured.
 
 ## Deployment Scope
 
-Comprehensible Input Reading Log currently has no authentication or multi-user
-data isolation. It is intended as a personal, local-first application. Do not
-expose it to an untrusted network without first adding an appropriate
-authentication and authorization layer.
+CI Book Tracker currently has no authentication or multi-user isolation. It is
+intended to run as a personal application on a trusted device or network. Do
+not expose it to an untrusted network without adding suitable authentication
+and authorization.
 
-## Project Principles
+## Roadmap
 
-- Mobile first
-- Manual entry first
-- Local SQLite storage
-- No accounts
-- No cloud sync
-- No social features
-- Simplicity over automation
+Possible future work includes:
 
-See [`docs/prompts/00_philosophy.md`](docs/prompts/00_philosophy.md) for the
-original project philosophy.
+- Burrito packaging for easier desktop distribution
+- Improved metadata provider coverage and matching
+- Better word estimation tools
+- Additional import options and quality-of-life improvements
 
 ## License
 

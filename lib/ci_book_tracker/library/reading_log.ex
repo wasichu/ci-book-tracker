@@ -16,6 +16,10 @@ defmodule CiBookTracker.Library.ReadingLog do
       accept [:name, :language_code, :word_goal]
     end
 
+    update :edit do
+      accept [:name, :language_code, :word_goal]
+    end
+
     destroy :destroy do
       primary? true
     end

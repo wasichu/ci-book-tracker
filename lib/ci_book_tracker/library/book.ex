@@ -24,6 +24,9 @@ defmodule CiBookTracker.Library.Book do
         :author,
         :page_count,
         :estimated_words,
+        :cover_url,
+        :cover_provider,
+        :cover_id,
         :difficulty_label,
         :status,
         :added_on,
@@ -43,6 +46,9 @@ defmodule CiBookTracker.Library.Book do
         :author,
         :page_count,
         :estimated_words,
+        :cover_url,
+        :cover_provider,
+        :cover_id,
         :difficulty_label,
         :status,
         :added_on,
@@ -104,6 +110,19 @@ defmodule CiBookTracker.Library.Book do
     end
 
     attribute :estimated_words, :integer do
+      public? true
+      constraints min: 1
+    end
+
+    attribute :cover_url, :string do
+      public? true
+    end
+
+    attribute :cover_provider, :string do
+      public? true
+    end
+
+    attribute :cover_id, :integer do
       public? true
       constraints min: 1
     end

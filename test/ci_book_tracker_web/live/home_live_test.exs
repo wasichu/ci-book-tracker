@@ -25,6 +25,13 @@ defmodule CiBookTrackerWeb.HomeLiveTest do
     assert has_element?(view, "#reading-log-#{french.id}", "(fr)")
     assert has_element?(view, "#reading-log-#{french.id}", "100 thousand words")
     assert has_element?(view, "#open-reading-log-#{french.id}", "Open")
+
+    assert has_element?(
+             view,
+             "#edit-reading-log-#{french.id}[href='/reading-logs/#{french.id}/edit']",
+             "Edit"
+           )
+
     assert has_element?(view, "#delete-reading-log-#{french.id}", "Delete")
 
     assert has_element?(view, "#reading-log-#{spanish.id}", "Spanish essays")

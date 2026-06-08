@@ -1,32 +1,77 @@
 defmodule CiBookTracker.Library.BookMetadata do
   @moduledoc """
-  Boundary for optional book metadata lookup.
+  Boundary for optional, user-initiated book metadata lookup.
 
-  Manual book entry remains the primary workflow. A future implementation may
-  supplement it with metadata from:
-
-  * Open Library
-  * Hardcover
-  * Goodreads imports via Apify
-
-  No provider is connected yet. Keeping lookup behind this module gives future
-  integrations one place to normalize provider responses without coupling the
-  book form or Library resources to an external service.
+  Providers normalize their responses into `Result` values so forms never
+  depend on provider-specific response shapes.
   """
 
-  @type lookup_result :: %{
-          query: String.t(),
-          results: list(),
-          status: :not_configured
-        }
+  alias CiBookTracker.Library.BookMetadata.Search
+  alias CiBookTracker.Settings.MetadataProviders
+
+  @type provider :: :open_library | :google_books | :hardcover | :all
+  @type lookup_option ::
+          {:language_code, String.t() | nil}
+          | {:provider, provider()}
+
+  @callback search(String.t(), keyword()) :: {:ok, Search.t()} | {:error, atom()}
 
   @doc """
-  Looks up metadata candidates for a title, author, or identifier.
-
-  Returns an empty placeholder until a metadata provider is configured.
+  Looks up metadata candidates for a title, author, ISBN, or general query.
   """
-  @spec lookup_book(String.t()) :: {:ok, lookup_result()}
-  def lookup_book(query) when is_binary(query) do
-    {:ok, %{query: query, results: [], status: :not_configured}}
+  @spec lookup_book(String.t(), [lookup_option()]) ::
+          {:ok, Search.t()} | {:error, atom()}
+  def lookup_book(query, opts \\ []) when is_binary(query) do
+    case Keyword.get(opts, :provider, :open_library) do
+      :all -> search_all(query, opts)
+      provider -> provider_module(provider).search(query, opts)
+    end
   end
+
+  defp search_all(query, opts) do
+    results =
+      MetadataProviders.enabled_search_providers()
+      |> Enum.map(&provider_module(&1).search(query, opts))
+
+    searches = for {:ok, search} <- results, do: search
+    errors = for {:error, reason} <- results, do: reason
+    books = searches |> Enum.flat_map(& &1.results) |> Enum.take(10)
+
+    cond do
+      searches == [] ->
+        {:error, List.first(errors) || :unavailable}
+
+      books == [] ->
+        {:ok,
+         %Search{
+           query: String.trim(query),
+           results: [],
+           status: :empty,
+           message: partial_failure_message(errors)
+         }}
+
+      true ->
+        {:ok,
+         %Search{
+           query: String.trim(query),
+           results: books,
+           status: :ok,
+           message: partial_failure_message(errors)
+         }}
+    end
+  end
+
+  defp partial_failure_message([]), do: nil
+
+  defp partial_failure_message(_errors),
+    do: "Some metadata sources were unavailable. Showing the results we could find."
+
+  defp provider_module(:open_library),
+    do: CiBookTracker.Library.BookMetadata.OpenLibrary
+
+  defp provider_module(:google_books),
+    do: CiBookTracker.Library.BookMetadata.GoogleBooks
+
+  defp provider_module(:hardcover),
+    do: CiBookTracker.Library.BookMetadata.Hardcover
 end

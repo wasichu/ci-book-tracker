@@ -4,6 +4,7 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
   import Phoenix.LiveViewTest
 
   alias CiBookTracker.Library
+  alias CiBookTracker.Library.BookMetadata.OpenLibrary
 
   test "requires an active reading log", %{conn: conn} do
     reading_log = Library.create_reading_log!("French", "fr", nil)
@@ -43,6 +44,115 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
     assert has_element?(view, "#book-notes", "Read aloud.")
     assert has_element?(view, "#back-to-dashboard")
     assert has_element?(view, "#edit-book")
+
+    assert has_element?(
+             view,
+             "#find-metadata[href='/books/#{book.id}/edit?metadata=refresh']",
+             "Refresh Metadata"
+           )
+
+    assert has_element?(view, "#book-detail-cover .hero-book-open")
+    refute has_element?(view, "#book-detail-cover img")
+  end
+
+  test "reviews and applies refreshed metadata without overwriting saved book data", %{conn: conn} do
+    reading_log = Library.create_reading_log!("Spanish", "es", nil)
+
+    book =
+      Library.add_book!(reading_log.id, "My Saved Title", %{
+        author: "My Saved Author",
+        notes: "Keep these notes.",
+        status: :in_progress,
+        started_on: ~D[2026-05-10]
+      })
+
+    conn = activate(conn, reading_log)
+    {:ok, view, _html} = live(conn, ~p"/books/#{book.id}/edit?metadata=refresh")
+
+    assert has_element?(view, "#metadata-search")
+    assert has_element?(view, "#metadata-search", "Refresh Metadata")
+
+    assert has_element?(
+             view,
+             "#metadata_query[value='My Saved Title My Saved Author']"
+           )
+
+    Req.Test.allow(OpenLibrary, self(), view.pid)
+
+    Req.Test.stub(OpenLibrary, fn conn ->
+      Req.Test.json(conn, %{
+        "docs" => [
+          %{
+            "key" => "/works/OL99W",
+            "title" => "Provider Title",
+            "author_name" => ["Provider Author"],
+            "number_of_pages_median" => 160,
+            "cover_i" => 999
+          }
+        ]
+      })
+    end)
+
+    view
+    |> form("#metadata-search-form",
+      metadata: %{provider: "open_library", query: "My Saved Title My Saved Author"}
+    )
+    |> render_submit()
+
+    view
+    |> element("button[phx-click='select_metadata']")
+    |> render_click()
+
+    assert has_element?(view, "#metadata-review", "Provider Title")
+    assert has_element?(view, "#metadata-review", "Title, author, notes")
+    assert has_element?(view, "#book_title[value='My Saved Title']")
+    assert has_element?(view, "#book_author[value='My Saved Author']")
+    assert has_element?(view, "#book_page_count[value='']")
+
+    view |> element("#apply-metadata") |> render_click()
+
+    refute has_element?(view, "#metadata-review")
+    assert has_element?(view, "#metadata-message", "then save the book")
+    assert has_element?(view, "#book_title[value='My Saved Title']")
+    assert has_element?(view, "#book_author[value='My Saved Author']")
+    assert has_element?(view, "#book_page_count[value='160']")
+    assert has_element?(view, "#book_estimated_words[value='40000']")
+    assert has_element?(view, "input[name='book[cover_provider]'][value='open_library']")
+    assert has_element?(view, "input[name='book[cover_id]'][value='999']")
+
+    result = view |> form("#edit-book-form") |> render_submit()
+    assert {:error, {:live_redirect, %{to: path}}} = result
+    assert path == "/books/#{book.id}"
+
+    updated = Library.get_book!(book.id)
+    assert updated.title == "My Saved Title"
+    assert updated.author == "My Saved Author"
+    assert updated.notes == "Keep these notes."
+    assert updated.status == :in_progress
+    assert updated.started_on == ~D[2026-05-10]
+    assert updated.finished_on == nil
+    assert updated.page_count == 160
+    assert updated.estimated_words == 40_000
+    assert updated.cover_provider == "open_library"
+    assert updated.cover_id == 999
+  end
+
+  test "shows a medium Open Library cover on the detail page", %{conn: conn} do
+    reading_log = Library.create_reading_log!("Spanish", "es", nil)
+
+    book =
+      Library.add_book!(reading_log.id, "Cien anos de soledad", %{
+        cover_provider: "open_library",
+        cover_id: 456,
+        cover_url: "https://covers.openlibrary.org/b/id/456-M.jpg"
+      })
+
+    {:ok, view, _html} = live(activate(conn, reading_log), ~p"/books/#{book.id}")
+
+    assert has_element?(
+             view,
+             "#book-detail-cover img[src='https://covers.openlibrary.org/b/id/456-M.jpg'][alt='Cover of Cien anos de soledad']"
+           )
   end
 
   test "shows status actions appropriate to the current status", %{conn: conn} do

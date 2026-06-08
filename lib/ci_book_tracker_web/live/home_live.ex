@@ -101,13 +101,20 @@ defmodule CiBookTrackerWeb.HomeLive do
               </div>
             </div>
 
-            <div class="mt-5 grid grid-cols-[minmax(0,1fr)_auto] gap-3">
+            <div class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
               <.link
                 id={"open-reading-log-#{reading_log.id}"}
                 href={~p"/reading-logs/#{reading_log.id}/open"}
-                class="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0"
+                class="col-span-2 inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0 sm:col-span-1"
               >
                 Open <.icon name="hero-arrow-right" class="size-4" />
+              </.link>
+              <.link
+                id={"edit-reading-log-#{reading_log.id}"}
+                navigate={~p"/reading-logs/#{reading_log.id}/edit"}
+                class="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+              >
+                <.icon name="hero-pencil-square" class="size-4" /> Edit
               </.link>
               <button
                 id={"delete-reading-log-#{reading_log.id}"}

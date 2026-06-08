@@ -47,7 +47,11 @@ config :spark,
 config :ci_book_tracker,
   generators: [timestamp_type: :utc_datetime],
   ecto_repos: [CiBookTracker.Repo],
-  ash_domains: [CiBookTracker.Library]
+  ash_domains: [CiBookTracker.Library, CiBookTracker.Settings]
+
+config :mime, :types, %{
+  "application/vnd.sqlite3" => ["db", "sqlite", "sqlite3"]
+}
 
 # Configures the endpoint
 config :ci_book_tracker, CiBookTrackerWeb.Endpoint,

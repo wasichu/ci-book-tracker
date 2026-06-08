@@ -18,6 +18,15 @@ config :ci_book_tracker, CiBookTrackerWeb.Endpoint,
   secret_key_base: "3AlXz58sz30mmMABymuU45GndHEG1mI7jYFd3oHlbw8BdrWijUEQQW2DzLB3w4vF",
   server: false
 
+config :ci_book_tracker, CiBookTracker.Library.BookMetadata.OpenLibrary,
+  request_options: [plug: {Req.Test, CiBookTracker.Library.BookMetadata.OpenLibrary}]
+
+config :ci_book_tracker, CiBookTracker.Library.BookMetadata.GoogleBooks,
+  request_options: [plug: {Req.Test, CiBookTracker.Library.BookMetadata.GoogleBooks}]
+
+config :ci_book_tracker, CiBookTracker.Library.BookMetadata.Hardcover,
+  request_options: [plug: {Req.Test, CiBookTracker.Library.BookMetadata.Hardcover}]
+
 # Print only warnings and errors during test
 config :logger, level: :warning
 

@@ -19,14 +19,20 @@ defmodule CiBookTrackerWeb.Router do
 
     live "/", HomeLive, :index
     live "/dashboard", DashboardLive, :index
+    live "/backup", BackupLive, :index
+    live "/settings", SettingsLive, :index
+    live "/settings/restore", DatabaseRestoreLive, :index
     live "/reading-logs/new", ReadingLogLive.New, :new
+    live "/reading-logs/:id/edit", ReadingLogLive.New, :edit
     live "/books/new", BookLive.Form, :new
+    live "/books/import", BookLive.Import, :new
     live "/books/:id/edit", BookLive.Form, :edit
     live "/books/:id", BookLive.Show, :show
 
     get "/reading-logs/:id/open", ReadingLogSessionController, :open
     delete "/reading-logs/:id", ReadingLogSessionController, :delete
     delete "/reading-log-session", ReadingLogSessionController, :switch
+    get "/backup/database", DatabaseExportController, :download
   end
 
   # Other scopes may use custom stacks.

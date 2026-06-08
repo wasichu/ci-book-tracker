@@ -143,4 +143,80 @@ defmodule CiBookTrackerWeb.ReadingLogLive.NewTest do
     assert Enum.map(Library.list_reading_logs!(), & &1.name) |> Enum.sort() ==
              ["French", "Spanish"]
   end
+
+  test "edits an existing reading log and returns to the selector", %{conn: conn} do
+    reading_log = Library.create_reading_log!("Spanish", "es", 500_000)
+    book = Library.add_book!(reading_log.id, "El Principito")
+
+    {:ok, view, _html} = live(conn, ~p"/reading-logs/#{reading_log.id}/edit")
+
+    assert has_element?(view, "#edit-reading-log-page", "Edit reading log")
+    assert has_element?(view, "#reading_log_name[value='Spanish']")
+    assert has_element?(view, "#reading_log_language_code option[value='es'][selected]")
+    assert has_element?(view, "#reading_log_goal_amount[value='500']")
+    assert has_element?(view, "#reading_log_goal_unit option[value='thousand'][selected]")
+    assert has_element?(view, "#save-reading-log", "Save Changes")
+    refute has_element?(view, "label", "Automatically open this log next time")
+
+    result =
+      view
+      |> form("#edit-reading-log-form",
+        reading_log: %{
+          name: "Spanish novels",
+          language_code: "es",
+          goal_amount: "1",
+          goal_unit: "million"
+        }
+      )
+      |> render_submit()
+
+    assert {:error, {:live_redirect, %{to: "/"}}} = result
+
+    updated = Library.get_reading_log!(reading_log.id)
+    assert updated.id == reading_log.id
+    assert updated.name == "Spanish novels"
+    assert updated.word_goal == 1_000_000
+    assert Library.get_book!(book.id).reading_log_id == reading_log.id
+  end
+
+  test "returns an edited active log to the dashboard", %{conn: conn} do
+    reading_log = Library.create_reading_log!("French", "fr", 1_500_000)
+    conn = init_test_session(conn, %{"active_reading_log_id" => reading_log.id})
+
+    {:ok, view, _html} =
+      live(conn, ~p"/reading-logs/#{reading_log.id}/edit?from=dashboard")
+
+    assert has_element?(view, "#reading_log_goal_amount[value='1.5']")
+    assert has_element?(view, "#reading_log_goal_unit option[value='million'][selected]")
+
+    result =
+      view
+      |> form("#edit-reading-log-form",
+        reading_log: %{
+          name: "French literature",
+          language_code: "fr",
+          goal_amount: "",
+          goal_unit: "thousand"
+        }
+      )
+      |> render_submit()
+
+    assert {:error, {:live_redirect, %{to: "/dashboard"}}} = result
+    assert Library.get_reading_log!(reading_log.id).word_goal == nil
+  end
+
+  test "requires a name when editing a reading log", %{conn: conn} do
+    reading_log = Library.create_reading_log!("Spanish", "es", nil)
+    {:ok, view, _html} = live(conn, ~p"/reading-logs/#{reading_log.id}/edit")
+
+    html =
+      view
+      |> form("#edit-reading-log-form",
+        reading_log: %{name: " ", language_code: "es", goal_amount: ""}
+      )
+      |> render_submit()
+
+    assert html =~ "can&#39;t be blank"
+    assert Library.get_reading_log!(reading_log.id).name == "Spanish"
+  end
 end

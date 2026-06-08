@@ -2,6 +2,7 @@ defmodule CiBookTrackerWeb.BookLive.Show do
   use CiBookTrackerWeb, :live_view
 
   alias CiBookTracker.Library
+  alias CiBookTrackerWeb.BookFormat
 
   @impl true
   def mount(%{"id" => id}, session, socket) do
@@ -31,7 +32,7 @@ defmodule CiBookTrackerWeb.BookLive.Show do
         {:noreply,
          socket
          |> assign(:book, book)
-         |> put_flash(:info, status_message(book, action))}
+         |> put_flash(:info, BookFormat.status_message(book, action))}
 
       {:error, _error} ->
         {:noreply, put_flash(socket, :error, "We couldn't update this book. Try again.")}
@@ -82,24 +83,40 @@ defmodule CiBookTrackerWeb.BookLive.Show do
             <.icon name="hero-arrow-left" class="size-4" /> Back to dashboard
           </.link>
 
-          <div class="mt-5 flex flex-wrap items-center gap-2">
-            <span class={["rounded-full px-3 py-1 text-xs font-semibold", status_class(@book.status)]}>
-              {status_label(@book.status)}
-            </span>
-            <span :if={@book.difficulty_label} class="text-sm font-medium text-slate-500">
-              {@book.difficulty_label}
-            </span>
-          </div>
+          <div class="mt-5 flex items-start gap-5 sm:gap-7">
+            <.book_cover
+              id="book-detail-cover"
+              title={@book.title}
+              cover_url={@book.cover_url}
+              cover_provider={@book.cover_provider}
+              cover_id={@book.cover_id}
+              size={:detail}
+            />
 
-          <p class="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
-            {@reading_log.name}
-          </p>
-          <h1 class="mt-2 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-            {@book.title}
-          </h1>
-          <p class="mt-2 text-lg leading-7 text-slate-600">
-            {@book.author || "Author not set"}
-          </p>
+            <div class="min-w-0 flex-1 pt-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class={[
+                  "rounded-full px-3 py-1 text-xs font-semibold",
+                  BookFormat.status_class(@book.status)
+                ]}>
+                  {BookFormat.status_label(@book.status)}
+                </span>
+                <span :if={@book.difficulty_label} class="text-sm font-medium text-slate-500">
+                  {@book.difficulty_label}
+                </span>
+              </div>
+
+              <p class="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
+                {@reading_log.name}
+              </p>
+              <h1 class="mt-2 text-2xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
+                {@book.title}
+              </h1>
+              <p class="mt-2 text-base leading-7 text-slate-600 sm:text-lg">
+                {@book.author || "Author not set"}
+              </p>
+            </div>
+          </div>
         </header>
 
         <section
@@ -131,7 +148,7 @@ defmodule CiBookTrackerWeb.BookLive.Show do
           id="book-details"
           class="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60 sm:p-7"
         >
-          <div class="flex items-center justify-between gap-4">
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p class="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">
                 Book details
@@ -140,23 +157,35 @@ defmodule CiBookTrackerWeb.BookLive.Show do
                 At a glance
               </h2>
             </div>
-            <.link
-              id="edit-book"
-              navigate={~p"/books/#{@book.id}/edit"}
-              class="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
-            >
-              <.icon name="hero-pencil-square" class="size-4" /> Edit Book
-            </.link>
+            <div class="grid gap-2 sm:grid-cols-2">
+              <.link
+                id="find-metadata"
+                navigate={~p"/books/#{@book.id}/edit?metadata=refresh"}
+                class="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 text-sm font-semibold text-amber-900 transition hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+              >
+                <.icon name="hero-arrow-path" class="size-4" /> Refresh Metadata
+              </.link>
+              <.link
+                id="edit-book"
+                navigate={~p"/books/#{@book.id}/edit"}
+                class="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+              >
+                <.icon name="hero-pencil-square" class="size-4" /> Edit Book
+              </.link>
+            </div>
           </div>
 
           <dl class="mt-6 divide-y divide-slate-100">
-            <.detail_row label="Status" value={status_label(@book.status)} />
+            <.detail_row label="Status" value={BookFormat.status_label(@book.status)} />
             <.detail_row label="Difficulty" value={@book.difficulty_label} />
             <.detail_row label="Page count" value={format_pages(@book.page_count)} />
-            <.detail_row label="Estimated total words" value={format_words(@book.estimated_words)} />
-            <.detail_row label="Added" value={format_date(@book.added_on)} />
-            <.detail_row label="Started" value={format_date(@book.started_on)} />
-            <.detail_row label="Finished" value={format_date(@book.finished_on)} />
+            <.detail_row
+              label="Estimated total words"
+              value={BookFormat.words(@book.estimated_words)}
+            />
+            <.detail_row label="Added" value={BookFormat.date(@book.added_on)} />
+            <.detail_row label="Started" value={BookFormat.date(@book.started_on)} />
+            <.detail_row label="Finished" value={BookFormat.date(@book.finished_on)} />
           </dl>
         </section>
 
@@ -290,48 +319,6 @@ defmodule CiBookTrackerWeb.BookLive.Show do
     ]
   end
 
-  defp status_label(:want_to_read), do: "Want to read"
-  defp status_label(:in_progress), do: "In progress"
-  defp status_label(:finished), do: "Finished"
-  defp status_label(:abandoned), do: "Abandoned"
-
-  defp status_class(:want_to_read), do: "bg-amber-100 text-amber-800"
-  defp status_class(:in_progress), do: "bg-sky-100 text-sky-800"
-  defp status_class(:finished), do: "bg-emerald-100 text-emerald-800"
-  defp status_class(:abandoned), do: "bg-slate-200 text-slate-700"
-
-  defp status_message(book, "start"), do: "Started #{book.title}."
-  defp status_message(book, "finish"), do: "Finished #{book.title}."
-  defp status_message(book, "abandon"), do: "Moved #{book.title} to abandoned."
-  defp status_message(book, "reopen"), do: "Reopened #{book.title}."
-
   defp format_pages(nil), do: nil
-  defp format_pages(page_count), do: format_number(page_count)
-
-  defp format_words(nil), do: nil
-
-  defp format_words(words) when words >= 1_000_000,
-    do: "#{compact(words / 1_000_000)} million"
-
-  defp format_words(words) when words >= 1_000, do: "#{compact(words / 1_000)} thousand"
-  defp format_words(words), do: format_number(words)
-
-  defp compact(number) do
-    if number == trunc(number),
-      do: Integer.to_string(trunc(number)),
-      else: :erlang.float_to_binary(number, decimals: 1)
-  end
-
-  defp format_date(nil), do: nil
-  defp format_date(date), do: Calendar.strftime(date, "%B %-d, %Y")
-
-  defp format_number(number) do
-    number
-    |> Integer.to_string()
-    |> String.reverse()
-    |> String.graphemes()
-    |> Enum.chunk_every(3)
-    |> Enum.map_join(",", &Enum.join/1)
-    |> String.reverse()
-  end
+  defp format_pages(page_count), do: BookFormat.number(page_count)
 end

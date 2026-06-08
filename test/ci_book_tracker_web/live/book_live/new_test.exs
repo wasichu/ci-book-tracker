@@ -4,6 +4,7 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
   import Phoenix.LiveViewTest
 
   alias CiBookTracker.Library
+  alias CiBookTracker.Library.BookMetadata.{GoogleBooks, OpenLibrary}
 
   test "requires a reading log", %{conn: conn} do
     assert {:error, {:live_redirect, %{to: "/"}}} = live(conn, ~p"/books/new")
@@ -16,10 +17,19 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
 
     assert has_element?(view, "#add-book-page")
     assert has_element?(view, "#add-book-form")
+    assert has_element?(view, "#metadata-search-form")
+    assert has_element?(view, "label", "Metadata source")
+    assert has_element?(view, "#metadata_provider option[value='open_library']", "Open Library")
+    assert has_element?(view, "#metadata_provider option[value='google_books']", "Google Books")
+    assert has_element?(view, "#metadata_provider option[value='all']", "All providers")
+    assert has_element?(view, "label", "Title, author, ISBN, or keywords")
     assert has_element?(view, "label", "Title")
     assert has_element?(view, "label", "Author")
     assert has_element?(view, "label", "Page count")
     assert has_element?(view, "label", "Estimated Total Words")
+    assert has_element?(view, "#word-estimate-helper", "Word Estimate Helper")
+    assert has_element?(view, "#word-estimate-helper", "The sample is never saved.")
+    assert has_element?(view, "#apply-word-estimate[disabled]", "Apply Estimate")
     refute has_element?(view, "#calculated-estimated-words")
     assert has_element?(view, "label", "Difficulty")
     assert has_element?(view, "label", "Reading status")
@@ -33,6 +43,182 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     assert render(view) =~ "Adding a book you&#39;ve already started or finished?"
     assert has_element?(view, "label", "Notes")
     assert has_element?(view, "#save-book", "Save Book")
+  end
+
+  test "searches Google Books and prefills normalized metadata", %{conn: conn} do
+    {conn, _reading_log} = create_reading_log(conn)
+    {:ok, view, _html} = live(conn, ~p"/books/new")
+
+    Req.Test.allow(GoogleBooks, self(), view.pid)
+
+    Req.Test.stub(GoogleBooks, fn conn ->
+      Req.Test.json(conn, %{
+        "items" => [
+          %{
+            "id" => "google-volume",
+            "volumeInfo" => %{
+              "title" => "Short Stories in Spanish",
+              "authors" => ["Olly Richards"],
+              "pageCount" => 240,
+              "language" => "es",
+              "publishedDate" => "2018-10-04",
+              "imageLinks" => %{"thumbnail" => "https://books.google.com/cover.jpg"}
+            }
+          }
+        ]
+      })
+    end)
+
+    view
+    |> form("#metadata-search-form",
+      metadata: %{provider: "google_books", query: "short stories"}
+    )
+    |> render_submit()
+
+    assert has_element?(view, "#metadata-results", "Short Stories in Spanish")
+    assert has_element?(view, "#metadata-results", "Google Books")
+    assert has_element?(view, "#metadata-results", "240 pages")
+
+    view
+    |> element("button[phx-click='select_metadata']")
+    |> render_click()
+
+    assert has_element?(view, "#book_title[value='Short Stories in Spanish']")
+    assert has_element?(view, "#book_author[value='Olly Richards']")
+    assert has_element?(view, "#book_page_count[value='240']")
+    assert has_element?(view, "#calculated-estimated-words", "60,000")
+    assert has_element?(view, "input[name='book[cover_provider]'][value='google_books']")
+
+    assert has_element?(
+             view,
+             "input[name='book[cover_url]'][value='https://books.google.com/cover.jpg']"
+           )
+  end
+
+  test "searches metadata and explicitly prefills the book form", %{conn: conn} do
+    {conn, _reading_log} = create_reading_log(conn)
+    {:ok, view, _html} = live(conn, ~p"/books/new")
+
+    Req.Test.allow(OpenLibrary, self(), view.pid)
+
+    Req.Test.stub(OpenLibrary, fn conn ->
+      Req.Test.json(conn, %{
+        "docs" => [
+          %{
+            "key" => "/works/OL2W",
+            "edition_key" => ["OL2M"],
+            "title" => "Cien anos de soledad",
+            "author_name" => ["Gabriel Garcia Marquez"],
+            "first_publish_year" => 1967,
+            "language" => ["spa"],
+            "number_of_pages_median" => 417,
+            "cover_i" => 456
+          }
+        ]
+      })
+    end)
+
+    view
+    |> form("#metadata-search-form", metadata: %{query: "solitude"})
+    |> render_submit()
+
+    assert has_element?(view, "#metadata-results", "Cien anos de soledad")
+    assert has_element?(view, "#metadata-results", "417 pages")
+    assert has_element?(view, "#book_title[value='']")
+
+    view
+    |> element("button[phx-click='select_metadata']")
+    |> render_click()
+
+    assert has_element?(view, "#metadata-message", "Review it before saving")
+    assert has_element?(view, "#book_title[value='Cien anos de soledad']")
+    assert has_element?(view, "#book_author[value='Gabriel Garcia Marquez']")
+    assert has_element?(view, "#book_page_count[value='417']")
+    assert has_element?(view, "#calculated-estimated-words", "104,250")
+    assert has_element?(view, "input[name='book[cover_provider]'][value='open_library']")
+    assert has_element?(view, "input[name='book[cover_id]'][value='456']")
+
+    assert has_element?(
+             view,
+             "input[name='book[cover_url]'][value='https://covers.openlibrary.org/b/id/456-M.jpg']"
+           )
+  end
+
+  test "saves selected metadata cover details with the book", %{conn: conn} do
+    {conn, reading_log} = create_reading_log(conn)
+    {:ok, view, _html} = live(conn, ~p"/books/new")
+
+    Req.Test.allow(OpenLibrary, self(), view.pid)
+
+    Req.Test.stub(OpenLibrary, fn conn ->
+      Req.Test.json(conn, %{
+        "docs" => [
+          %{
+            "key" => "/works/OL2W",
+            "title" => "Cien anos de soledad",
+            "cover_i" => 456
+          }
+        ]
+      })
+    end)
+
+    view
+    |> form("#metadata-search-form", metadata: %{query: "solitude"})
+    |> render_submit()
+
+    view
+    |> element("button[phx-click='select_metadata']")
+    |> render_click()
+
+    view
+    |> form("#add-book-form")
+    |> render_submit()
+
+    [book] =
+      Library.list_books!(
+        query: [filter: [reading_log_id: reading_log.id, title: "Cien anos de soledad"]]
+      )
+
+    assert book.cover_provider == "open_library"
+    assert book.cover_id == 456
+    assert book.cover_url == "https://covers.openlibrary.org/b/id/456-M.jpg"
+  end
+
+  test "keeps manual entry available when metadata lookup fails", %{conn: conn} do
+    {conn, _reading_log} = create_reading_log(conn)
+    {:ok, view, _html} = live(conn, ~p"/books/new")
+
+    Req.Test.allow(OpenLibrary, self(), view.pid)
+    Req.Test.stub(OpenLibrary, &Req.Test.transport_error(&1, :econnrefused))
+
+    view
+    |> form("#metadata-search-form", metadata: %{query: "solitude"})
+    |> render_submit()
+
+    assert has_element?(view, "#metadata-message", "unavailable right now")
+    assert has_element?(view, "#add-book-form")
+  end
+
+  test "explains Google Books quota failures", %{conn: conn} do
+    {conn, _reading_log} = create_reading_log(conn)
+    {:ok, view, _html} = live(conn, ~p"/books/new")
+
+    Req.Test.allow(GoogleBooks, self(), view.pid)
+
+    Req.Test.stub(GoogleBooks, fn conn ->
+      conn
+      |> Plug.Conn.put_status(429)
+      |> Req.Test.json(%{"error" => %{"status" => "RESOURCE_EXHAUSTED"}})
+    end)
+
+    view
+    |> form("#metadata-search-form",
+      metadata: %{provider: "google_books", query: "The Little Prince"}
+    )
+    |> render_submit()
+
+    assert has_element?(view, "#metadata-message", "Configure GOOGLE_BOOKS_API_KEY")
+    assert has_element?(view, "#add-book-form")
   end
 
   test "shows a read-only formatted total calculated from page count", %{conn: conn} do
@@ -71,6 +257,67 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
 
     assert has_element?(view, "#book_estimated_words[type='number'][value='27500']")
     refute has_element?(view, "#calculated-estimated-words")
+  end
+
+  test "calculates and applies a sample-based word estimate", %{conn: conn} do
+    {conn, reading_log} = create_reading_log(conn)
+    {:ok, view, _html} = live(conn, ~p"/books/new")
+
+    view
+    |> form("#add-book-form",
+      book: %{title: "Sampled book", page_count: "180"},
+      estimator: %{
+        sample_text: "Uno dos tres cuatro cinco seis",
+        sample_units: "2",
+        total_units: "100",
+        unit_type: "pages"
+      }
+    )
+    |> render_change()
+
+    assert has_element?(view, "#sample-word-count", "6")
+    assert has_element?(view, "#sample-estimated-words", "300")
+    refute has_element?(view, "#apply-word-estimate[disabled]")
+
+    view |> element("#apply-word-estimate") |> render_click()
+
+    assert has_element?(view, "#book_estimated_words[value='300']")
+    assert has_element?(view, "input[name='book[estimated_words_mode]'][value='sample']")
+    refute has_element?(view, "#calculated-estimated-words")
+
+    view |> form("#add-book-form") |> render_submit()
+
+    [book] =
+      Library.list_books!(
+        query: [filter: [reading_log_id: reading_log.id, title: "Sampled book"]]
+      )
+
+    assert book.estimated_words == 300
+    refute Map.has_key?(Map.from_struct(book), :sample_text)
+  end
+
+  test "shows a helpful error for an invalid sample range", %{conn: conn} do
+    {conn, _reading_log} = create_reading_log(conn)
+    {:ok, view, _html} = live(conn, ~p"/books/new")
+
+    view
+    |> form("#add-book-form",
+      estimator: %{
+        sample_text: "Uno dos tres",
+        sample_units: "10",
+        total_units: "5",
+        unit_type: "chapters"
+      }
+    )
+    |> render_change()
+
+    assert has_element?(
+             view,
+             "#word-estimate-error",
+             "Total unit count must be at least the sample unit count."
+           )
+
+    assert has_element?(view, "#apply-word-estimate[disabled]")
   end
 
   test "clears a calculated total when page count is removed", %{conn: conn} do
