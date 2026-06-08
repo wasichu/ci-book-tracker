@@ -51,8 +51,9 @@ defmodule CiBookTrackerWeb.CoreComponents do
       :if={msg = render_slot(@inner_block) || Phoenix.Flash.get(@flash, @kind)}
       id={@id}
       phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
+      phx-hook={@kind == :info && "AutoDismissFlash"}
       role="alert"
-      class="fixed right-4 top-4 z-50"
+      class="fixed right-4 top-4 z-50 transition-opacity duration-200"
       {@rest}
     >
       <div class={[

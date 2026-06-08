@@ -25,11 +25,40 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/ci_book_tracker"
 import topbar from "../vendor/topbar"
 
+const AutoDismissFlash = {
+  mounted() {
+    this.scheduleDismiss()
+  },
+
+  updated() {
+    this.el.classList.remove("opacity-0")
+    this.scheduleDismiss()
+  },
+
+  destroyed() {
+    this.clearTimers()
+  },
+
+  scheduleDismiss() {
+    this.clearTimers()
+
+    this.dismissTimer = window.setTimeout(() => {
+      this.el.classList.add("opacity-0")
+      this.removeTimer = window.setTimeout(() => this.el.click(), 200)
+    }, 3000)
+  },
+
+  clearTimers() {
+    window.clearTimeout(this.dismissTimer)
+    window.clearTimeout(this.removeTimer)
+  },
+}
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks},
+  hooks: {...colocatedHooks, AutoDismissFlash},
 })
 
 // Show progress bar on live navigation and form submits

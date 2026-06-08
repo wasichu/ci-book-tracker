@@ -41,13 +41,14 @@ defmodule CiBookTrackerWeb.HomeLive do
             <.icon name="hero-language" class="size-7" />
           </div>
           <p class="mt-7 text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
-            Local reading tracker
+            Comprehensible Input Reading Log
           </p>
           <h1 class="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-            Choose a reading log
+            Choose a Reading Log
           </h1>
           <p class="mt-4 max-w-xl text-base leading-7 text-slate-600">
-            Open a language shelf or create a new one. Every log and book stays on this device.
+            Pick one that already exists or create a new one. <br /> Track the number of words read.
+            <br /> All books and progress stay on this device.
           </p>
         </header>
 
