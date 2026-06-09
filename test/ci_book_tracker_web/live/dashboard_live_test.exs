@@ -33,6 +33,13 @@ defmodule CiBookTrackerWeb.DashboardLiveTest do
     assert has_element?(view, "#words-completed", "16,000")
     assert has_element?(view, "#goal-progress", "16%")
     assert has_element?(view, "#books-finished #book-#{finished.id}", "Le Petit Prince")
+
+    assert has_element?(
+             view,
+             "#book-#{finished.id}-edit[href='/books/#{finished.id}/edit']",
+             "Edit"
+           )
+
     refute has_element?(view, "#book-#{other_book.id}")
     assert has_element?(view, "#switch-reading-log", "Switch Log")
 

@@ -398,12 +398,22 @@ defmodule CiBookTrackerWeb.DashboardLive do
               </h4>
               <p :if={@book.author} class="mt-1 text-sm text-slate-500">{@book.author}</p>
             </div>
-            <span
-              :if={@book.difficulty_label}
-              class="shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800"
-            >
-              {@book.difficulty_label}
-            </span>
+            <div class="flex shrink-0 items-center gap-2">
+              <span
+                :if={@book.difficulty_label}
+                class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800"
+              >
+                {@book.difficulty_label}
+              </span>
+              <.link
+                id={"book-#{@book.id}-edit"}
+                navigate={~p"/books/#{@book.id}/edit"}
+                aria-label={"Edit #{@book.title}"}
+                class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-slate-500 transition hover:bg-amber-50 hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+              >
+                <.icon name="hero-pencil-square" class="size-4" /> Edit
+              </.link>
+            </div>
           </div>
 
           <div
