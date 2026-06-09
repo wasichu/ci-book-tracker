@@ -51,7 +51,7 @@ Further background:
 - Optional metadata lookup and metadata refresh
 - Optional cover lookup
 - Bulk book import from CSV
-- Sample-based word count estimator
+- Standalone and book-form sample-based word count estimator
 - Local SQLite storage
 - Database export and restore
 - Settings page with metadata provider configuration
@@ -71,6 +71,17 @@ variables. Availability and result quality depend on the provider.
 Metadata lookup is an enhancement, not a requirement. Books can always be
 entered and edited manually, and the rest of the application remains useful
 without internet access.
+
+## Word Count Estimator
+
+The global header links to a standalone word count estimator that does not
+require an active reading log. Paste a representative passage, enter how many
+pages, Kindle locations, screens, chapters, or percentage points it covers,
+and provide the corresponding total for the book.
+
+The estimator counts the sample and scales it to an estimated total. Sample
+text and results are not saved. The same estimator is available while adding
+or editing a book, where its result can be applied directly to the book form.
 
 ## Philosophy
 
@@ -108,6 +119,10 @@ Requirements:
 - Phoenix 1.8
 - SQLite development support required by `exqlite`
 - Standard build tools for compiling dependencies
+
+The repository's `.tool-versions` pins the recommended Elixir and Erlang/OTP
+versions for `mise` or `asdf`. After installing either version manager, run its
+install command from the project directory before running Mix tasks.
 
 Install dependencies, prepare the database, and build the assets:
 
