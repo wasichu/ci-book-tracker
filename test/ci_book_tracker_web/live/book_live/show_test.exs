@@ -246,10 +246,12 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
     refute has_element?(reading_view, "#book-start")
 
     {:ok, finished_view, _html} = live(conn, ~p"/books/#{finished.id}")
-    assert has_element?(finished_view, "#book-reopen")
+    refute has_element?(finished_view, "#book-status-actions")
+    refute has_element?(finished_view, "#book-reopen")
 
     {:ok, abandoned_view, _html} = live(conn, ~p"/books/#{abandoned.id}")
-    assert has_element?(abandoned_view, "#book-reopen")
+    refute has_element?(abandoned_view, "#book-status-actions")
+    refute has_element?(abandoned_view, "#book-reopen")
   end
 
   test "updates status without leaving the detail page", %{conn: conn} do
@@ -260,7 +262,8 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
     view |> element("#book-finish") |> render_click()
 
     assert has_element?(view, "#book-detail", "Finished")
-    assert has_element?(view, "#book-reopen")
+    refute has_element?(view, "#book-status-actions")
+    refute has_element?(view, "#book-reopen")
 
     updated = Library.get_book!(book.id)
     assert updated.status == :finished

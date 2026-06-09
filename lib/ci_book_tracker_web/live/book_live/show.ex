@@ -26,7 +26,7 @@ defmodule CiBookTrackerWeb.BookLive.Show do
 
   @impl true
   def handle_event("update_status", %{"action" => action}, socket)
-      when action in ~w(start finish abandon reopen) do
+      when action in ~w(start finish abandon) do
     case update_book_status(socket.assigns.book, action) do
       {:ok, book} ->
         {:noreply,
@@ -120,6 +120,7 @@ defmodule CiBookTrackerWeb.BookLive.Show do
         </header>
 
         <section
+          :if={status_actions(@book.status) != []}
           id="book-status-actions"
           class="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60 sm:p-7"
         >
@@ -294,7 +295,6 @@ defmodule CiBookTrackerWeb.BookLive.Show do
   defp update_book_status(book, "start"), do: Library.start_book(book)
   defp update_book_status(book, "finish"), do: Library.finish_book(book)
   defp update_book_status(book, "abandon"), do: Library.abandon_book(book)
-  defp update_book_status(book, "reopen"), do: Library.reopen_book(book)
 
   defp status_actions(:want_to_read) do
     [
@@ -312,12 +312,7 @@ defmodule CiBookTrackerWeb.BookLive.Show do
     ]
   end
 
-  defp status_actions(status) when status in [:finished, :abandoned] do
-    [
-      {"reopen", "Reopen", "hero-arrow-path",
-       "sm:col-span-2 bg-slate-950 text-white hover:bg-amber-800"}
-    ]
-  end
+  defp status_actions(status) when status in [:finished, :abandoned], do: []
 
   defp format_pages(nil), do: nil
   defp format_pages(page_count), do: BookFormat.number(page_count)
