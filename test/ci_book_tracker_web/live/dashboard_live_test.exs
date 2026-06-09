@@ -62,6 +62,7 @@ defmodule CiBookTrackerWeb.DashboardLiveTest do
 
     assert has_element?(view, "#dashboard", "Build your reading habit one book at a time.")
     refute has_element?(view, "#goal-progress")
+    refute has_element?(view, "#summary-progress-volume")
 
     for status <- ~w(in_progress want_to_read finished abandoned) do
       assert has_element?(view, "#books-#{status}", "No books here yet.")
@@ -91,7 +92,38 @@ defmodule CiBookTrackerWeb.DashboardLiveTest do
     refute has_element?(view, "#book-#{uncovered.id}-cover img")
   end
 
-  test "orders completed words after finished books and totals pages in progress", %{conn: conn} do
+  test "orders completed words after finished books and prefers words in progress", %{conn: conn} do
+    reading_log = Library.create_reading_log!("Spanish", "es", nil)
+
+    reading_log.id
+    |> Library.add_book!("First active book", %{page_count: 120, estimated_words: 30_000})
+    |> Library.start_book!()
+
+    reading_log.id
+    |> Library.add_book!("Second active book", %{page_count: 80, estimated_words: 20_000})
+    |> Library.start_book!()
+
+    conn = active_log(conn, reading_log)
+    {:ok, view, html} = live(conn, ~p"/dashboard")
+
+    assert has_element?(
+             view,
+             "#summary-progress-volume",
+             "Words in progress"
+           )
+
+    assert has_element?(view, "#summary-progress-volume", "50,000")
+    refute has_element?(view, "#summary-progress-volume", "Pages in progress")
+
+    {finished_position, _length} = :binary.match(html, ~s(id="summary-books-finished"))
+    {words_position, _length} = :binary.match(html, ~s(id="words-completed"))
+    {in_progress_position, _length} = :binary.match(html, ~s(id="summary-books-in-progress"))
+
+    assert finished_position < words_position
+    assert words_position < in_progress_position
+  end
+
+  test "falls back to pages when active books do not have word estimates", %{conn: conn} do
     reading_log = Library.create_reading_log!("Spanish", "es", nil)
 
     reading_log.id
@@ -102,26 +134,25 @@ defmodule CiBookTrackerWeb.DashboardLiveTest do
     |> Library.add_book!("Second active book", %{page_count: 80})
     |> Library.start_book!()
 
-    conn = active_log(conn, reading_log)
-    {:ok, view, html} = live(conn, ~p"/dashboard")
+    {:ok, view, _html} = live(active_log(conn, reading_log), ~p"/dashboard")
 
-    assert has_element?(view, "#summary-books-in-progress", "200 pages in progress")
-
-    {finished_position, _length} = :binary.match(html, ~s(id="summary-books-finished"))
-    {words_position, _length} = :binary.match(html, ~s(id="words-completed"))
-    {in_progress_position, _length} = :binary.match(html, ~s(id="summary-books-in-progress"))
-
-    assert finished_position < words_position
-    assert words_position < in_progress_position
+    assert has_element?(view, "#summary-progress-volume", "Pages in progress")
+    assert has_element?(view, "#summary-progress-volume", "200")
   end
 
-  test "notes when active books do not have page counts", %{conn: conn} do
+  test "notes when active books do not have word estimates or page counts", %{conn: conn} do
     reading_log = Library.create_reading_log!("Spanish", "es", nil)
     reading_log.id |> Library.add_book!("Active book") |> Library.start_book!()
 
     {:ok, view, _html} = live(active_log(conn, reading_log), ~p"/dashboard")
 
-    assert has_element?(view, "#summary-books-in-progress", "Page count not set")
+    assert has_element?(
+             view,
+             "#summary-progress-volume",
+             "Reading volume"
+           )
+
+    assert has_element?(view, "#summary-progress-volume", "Not set")
   end
 
   test "shows the status controls appropriate for each book", %{conn: conn} do

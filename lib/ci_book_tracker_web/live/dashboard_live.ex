@@ -132,7 +132,7 @@ defmodule CiBookTrackerWeb.DashboardLive do
           />
           <.summary_card
             id="words-completed"
-            label="Estimated words completed"
+            label="Words completed"
             value={BookFormat.number(@summary.words_completed)}
             icon="hero-document-text"
             icon_class="bg-violet-100 text-violet-800"
@@ -141,9 +141,16 @@ defmodule CiBookTrackerWeb.DashboardLive do
             id="summary-books-in-progress"
             label="Books in progress"
             value={@summary.books_in_progress}
-            detail={in_progress_pages_detail(@summary)}
             icon="hero-book-open"
             icon_class="bg-sky-100 text-sky-800"
+          />
+          <.summary_card
+            :if={@summary.books_in_progress > 0}
+            id="summary-progress-volume"
+            label={in_progress_label(@summary)}
+            value={in_progress_value(@summary)}
+            icon="hero-bars-3-bottom-left"
+            icon_class="bg-indigo-100 text-indigo-800"
           />
 
           <article
@@ -355,8 +362,10 @@ defmodule CiBookTrackerWeb.DashboardLive do
       </div>
       <div>
         <p class="text-sm font-medium text-slate-600">{@label}</p>
-        <p class="mt-0.5 text-2xl font-semibold tracking-tight text-slate-950">{@value}</p>
-        <p :if={@detail} class="mt-1 text-sm font-medium text-slate-500">{@detail}</p>
+        <div class="mt-0.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <p class="text-2xl font-semibold tracking-tight text-slate-950">{@value}</p>
+          <p :if={@detail} class="text-sm font-medium text-slate-500">{@detail}</p>
+        </div>
       </div>
     </article>
     """
@@ -542,15 +551,22 @@ defmodule CiBookTrackerWeb.DashboardLive do
       |> Enum.map(&(&1.estimated_words || 0))
       |> Enum.sum()
 
+    in_progress_books = Enum.filter(books, &(&1.status == :in_progress))
+
+    words_in_progress =
+      in_progress_books
+      |> Enum.map(&(&1.estimated_words || 0))
+      |> Enum.sum()
+
     pages_in_progress =
-      books
-      |> Enum.filter(&(&1.status == :in_progress))
+      in_progress_books
       |> Enum.map(&(&1.page_count || 0))
       |> Enum.sum()
 
     %{
       books_finished: books_finished,
       books_in_progress: books_in_progress,
+      words_in_progress: words_in_progress,
       pages_in_progress: pages_in_progress,
       words_completed: words_completed,
       goal_progress: goal_progress(words_completed, word_goal)
@@ -566,17 +582,24 @@ defmodule CiBookTrackerWeb.DashboardLive do
     %{
       books_finished: 0,
       books_in_progress: 0,
+      words_in_progress: 0,
       pages_in_progress: 0,
       words_completed: 0,
       goal_progress: 0
     }
   end
 
-  defp in_progress_pages_detail(%{books_in_progress: 0}), do: nil
-  defp in_progress_pages_detail(%{pages_in_progress: 0}), do: "Page count not set"
+  defp in_progress_label(%{words_in_progress: words}) when words > 0, do: "Words in progress"
+  defp in_progress_label(%{pages_in_progress: pages}) when pages > 0, do: "Pages in progress"
+  defp in_progress_label(_summary), do: "Reading volume"
 
-  defp in_progress_pages_detail(%{pages_in_progress: pages}),
-    do: "#{BookFormat.number(pages)} pages in progress"
+  defp in_progress_value(%{words_in_progress: words}) when words > 0,
+    do: BookFormat.number(words)
+
+  defp in_progress_value(%{pages_in_progress: pages}) when pages > 0,
+    do: BookFormat.number(pages)
+
+  defp in_progress_value(_summary), do: "Not set"
 
   defp empty_books_by_status do
     Map.new(@status_groups, fn {status, _label, _icon, _class} -> {status, []} end)
