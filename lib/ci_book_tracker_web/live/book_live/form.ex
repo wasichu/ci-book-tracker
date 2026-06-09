@@ -402,9 +402,9 @@ defmodule CiBookTrackerWeb.BookLive.Form do
                     type="submit"
                     form={form_id(@book)}
                     phx-disable-with="Saving..."
-                    class="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 sm:w-auto"
+                    class="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-700 px-4 text-sm font-semibold text-white shadow-sm shadow-amber-900/15 transition hover:-translate-y-0.5 hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0 disabled:translate-y-0 sm:w-auto"
                   >
-                    <.icon name="hero-check" class="size-4" /> {save_label(@book)}
+                    <.icon name="hero-book-open" class="size-4" /> {save_label(@book)}
                   </button>
                 </div>
               </div>
