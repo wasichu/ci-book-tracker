@@ -51,14 +51,28 @@ defmodule CiBookTrackerWeb.Layouts do
               </span>
             </span>
           </a>
-          <.link
-            id="settings-link"
-            navigate={~p"/settings"}
-            class="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-slate-600 transition hover:bg-amber-50 hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
-          >
-            <.icon name="hero-cog-6-tooth" class="size-4" />
-            <span class="hidden sm:inline">Settings</span>
-          </.link>
+          <nav class="flex shrink-0 items-center gap-1" aria-label="Application tools">
+            <.link
+              id="word-estimator-link"
+              navigate={~p"/word-estimator"}
+              aria-label="Word estimator"
+              title="Word estimator"
+              class="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-slate-600 transition hover:bg-amber-50 hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+            >
+              <.icon name="hero-calculator" class="size-4" />
+              <span class="hidden md:inline">Word Estimator</span>
+            </.link>
+            <.link
+              id="settings-link"
+              navigate={~p"/settings"}
+              aria-label="Settings"
+              title="Settings"
+              class="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-slate-600 transition hover:bg-amber-50 hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+            >
+              <.icon name="hero-cog-6-tooth" class="size-4" />
+              <span class="hidden sm:inline">Settings</span>
+            </.link>
+          </nav>
         </div>
       </header>
 

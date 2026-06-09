@@ -22,6 +22,7 @@ defmodule CiBookTrackerWeb.Router do
     live "/backup", BackupLive, :index
     live "/settings", SettingsLive, :index
     live "/settings/restore", DatabaseRestoreLive, :index
+    live "/word-estimator", WordEstimatorLive, :index
     live "/reading-logs/new", ReadingLogLive.New, :new
     live "/reading-logs/:id/edit", ReadingLogLive.New, :edit
     live "/books/new", BookLive.Form, :new

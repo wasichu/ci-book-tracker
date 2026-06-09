@@ -125,7 +125,7 @@ defmodule CiBookTrackerWeb.ReadingLogLive.New do
               />
             </div>
             <p class="-mt-2 text-xs leading-5 text-slate-500">
-              Optional. For example, 500 thousand words is stored as 500,000 words.
+              Optional.
             </p>
           </fieldset>
 
