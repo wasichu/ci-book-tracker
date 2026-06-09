@@ -10,8 +10,12 @@ defmodule CiBookTrackerWeb.HomeLiveTest do
 
     assert has_element?(view, "#reading-log-selector")
     assert has_element?(view, "#empty-reading-logs", "No reading logs yet")
+    assert has_element?(view, "#new-reading-log", "Start Tracking")
+    assert has_element?(view, "#new-reading-log", "Create a new reading log")
     assert has_element?(view, "#create-reading-log", "Create New Reading Log")
     assert has_element?(view, "#create-reading-log[href='/reading-logs/new']")
+    assert has_element?(view, "#existing-reading-logs", "Continue Tracking")
+    assert has_element?(view, "#existing-reading-logs", "Existing reading logs")
   end
 
   test "lists all reading logs with human-readable details", %{conn: conn} do
@@ -20,6 +24,7 @@ defmodule CiBookTrackerWeb.HomeLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/")
 
+    assert has_element?(view, "#existing-reading-logs", "Continue Tracking")
     assert has_element?(view, "#reading-log-#{french.id}", "French novels")
     assert has_element?(view, "#reading-log-#{french.id}", "French")
     assert has_element?(view, "#reading-log-#{french.id}", "(fr)")
