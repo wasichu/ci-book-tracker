@@ -151,7 +151,7 @@ defmodule CiBookTrackerWeb.ReadingLogLive.New do
               label="Automatically open this log next time"
             />
             <p class="-mt-2 pl-7 text-xs leading-5 text-slate-500">
-              You can always use Switch Log from the dashboard to choose another shelf.
+              You can always use Switch Log from the dashboard to choose another log.
             </p>
           </div>
 
@@ -316,7 +316,7 @@ defmodule CiBookTrackerWeb.ReadingLogLive.New do
   defp page_id(_reading_log), do: "edit-reading-log-page"
   defp form_id(nil), do: "create-reading-log-form"
   defp form_id(_reading_log), do: "edit-reading-log-form"
-  defp eyebrow(nil), do: "Start your shelf"
+  defp eyebrow(nil), do: "Start your log"
   defp eyebrow(_reading_log), do: "Log settings"
   defp heading(nil), do: "Create a reading log"
   defp heading(_reading_log), do: "Edit reading log"

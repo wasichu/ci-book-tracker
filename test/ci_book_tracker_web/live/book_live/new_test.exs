@@ -489,10 +489,10 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     {:ok, view, _html} = live(conn, ~p"/books/new")
 
     view
-    |> form("#add-book-form", book: %{title: "Active shelf book"})
+    |> form("#add-book-form", book: %{title: "Active log book"})
     |> render_submit()
 
-    assert [%{title: "Active shelf book"}] =
+    assert [%{title: "Active log book"}] =
              Library.list_books!(query: [filter: [reading_log_id: active_log.id]])
 
     assert Library.list_books!(query: [filter: [reading_log_id: inactive_log.id]]) == []

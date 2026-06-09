@@ -196,7 +196,7 @@ defmodule CiBookTrackerWeb.DashboardLive do
               Your books
             </p>
             <h2 class="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
-              Reading shelf
+              Reading log
             </h2>
           </div>
 

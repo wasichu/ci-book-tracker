@@ -286,7 +286,7 @@ defmodule CiBookTrackerWeb.BookLive.Import do
             navigate={~p"/dashboard"}
             class="mt-5 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-900 px-5 font-semibold text-white transition hover:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
           >
-            View reading shelf <.icon name="hero-arrow-right" class="size-4" />
+            View reading log <.icon name="hero-arrow-right" class="size-4" />
           </.link>
         </section>
 
