@@ -27,6 +27,13 @@ defmodule CiBookTrackerWeb.WordEstimatorLive do
     {:noreply, assign_estimate(socket, params)}
   end
 
+  def handle_event("clear", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:form, to_form(@empty_params, as: :estimator))
+     |> assign(:result, @empty_result)}
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -45,7 +52,7 @@ defmodule CiBookTrackerWeb.WordEstimatorLive do
         </header>
 
         <.form for={@form} id="word-estimator-form" phx-change="estimate">
-          <WordEstimatorComponents.panel form={@form} result={@result} />
+          <WordEstimatorComponents.panel form={@form} result={@result} clear_event="clear" />
         </.form>
 
         <aside class="rounded-2xl border border-amber-200 bg-amber-50/70 p-5 text-sm leading-6 text-amber-950">
