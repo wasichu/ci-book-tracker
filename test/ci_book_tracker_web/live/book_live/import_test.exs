@@ -23,6 +23,7 @@ defmodule CiBookTrackerWeb.BookLive.ImportTest do
         }
       ])
 
+    refute render(view) =~ "0%"
     assert render_upload(upload, "books.csv") =~ "100%"
 
     view
@@ -47,6 +48,77 @@ defmodule CiBookTrackerWeb.BookLive.ImportTest do
     {:ok, view, _html} = live(conn, ~p"/dashboard")
 
     assert has_element?(view, "#import-books[href='/books/import']", "Import CSV")
+  end
+
+  test "removes a selected CSV before import", %{conn: conn} do
+    reading_log = Library.create_reading_log!("Spanish", "es", nil)
+    conn = init_test_session(conn, active_reading_log_id: reading_log.id)
+    {:ok, view, _html} = live(conn, ~p"/books/import")
+
+    upload =
+      file_input(view, "#csv-upload-form", :csv, [
+        %{
+          name: "books.csv",
+          content: "title\nValid\n",
+          type: "text/csv"
+        }
+      ])
+
+    assert render_upload(upload, "books.csv") =~ "books.csv"
+    assert has_element?(view, "button[aria-label='Remove books.csv']")
+
+    view
+    |> element("button[aria-label='Remove books.csv']")
+    |> render_click()
+
+    refute render(view) =~ "books.csv"
+    refute has_element?(view, "button[aria-label='Remove books.csv']")
+  end
+
+  test "replacing the CSV discards the previous preview", %{conn: conn} do
+    reading_log = Library.create_reading_log!("Spanish", "es", nil)
+    conn = init_test_session(conn, active_reading_log_id: reading_log.id)
+    {:ok, view, _html} = live(conn, ~p"/books/import")
+
+    first_upload =
+      file_input(view, "#csv-upload-form", :csv, [
+        %{
+          name: "first.csv",
+          content: "title\nFirst book\n",
+          type: "text/csv"
+        }
+      ])
+
+    render_upload(first_upload, "first.csv")
+    view |> form("#csv-upload-form") |> render_submit()
+
+    assert has_element?(view, "#import-preview", "1 valid")
+    assert has_element?(view, "#import-row-2", "First book")
+
+    second_upload =
+      file_input(view, "#csv-upload-form", :csv, [
+        %{
+          name: "second.csv",
+          content: "title\nSecond book\n",
+          type: "text/csv"
+        }
+      ])
+
+    view |> form("#csv-upload-form") |> render_change()
+    render_upload(second_upload, "second.csv")
+
+    refute has_element?(view, "#import-preview")
+    refute has_element?(view, "#confirm-import")
+
+    view |> form("#csv-upload-form") |> render_submit()
+
+    assert has_element?(view, "#import-row-2", "Second book")
+    refute render(view) =~ "First book"
+
+    view |> element("#confirm-import") |> render_click()
+
+    assert [%{title: "Second book"}] =
+             Library.list_books!(query: [filter: [reading_log_id: reading_log.id]])
   end
 
   test "explains required fields and allowed statuses", %{conn: conn} do

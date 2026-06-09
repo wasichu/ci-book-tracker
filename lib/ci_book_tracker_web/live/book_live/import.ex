@@ -27,7 +27,17 @@ defmodule CiBookTrackerWeb.BookLive.Import do
   end
 
   @impl true
-  def handle_event("validate_upload", _params, socket), do: {:noreply, socket}
+  def handle_event("validate_upload", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:preview, nil)
+     |> assign(:file_errors, [])
+     |> assign(:import_summary, nil)}
+  end
+
+  def handle_event("cancel_upload", %{"ref" => ref}, socket) do
+    {:noreply, cancel_upload(socket, :csv, ref)}
+  end
 
   def handle_event("preview", _params, socket) do
     results =
@@ -127,7 +137,22 @@ defmodule CiBookTrackerWeb.BookLive.Import do
             <div :for={entry <- @uploads.csv.entries} class="rounded-xl bg-slate-100 p-3 text-sm">
               <div class="flex items-center justify-between gap-3">
                 <span class="truncate font-medium text-slate-800">{entry.client_name}</span>
-                <span class="shrink-0 text-slate-500">{entry.progress}%</span>
+                <div class="flex shrink-0 items-center gap-2">
+                  <span :if={entry.progress > 0} class="text-slate-500">
+                    {entry.progress}%
+                  </span>
+                  <button
+                    type="button"
+                    id={"cancel-upload-#{entry.ref}"}
+                    phx-click="cancel_upload"
+                    phx-value-ref={entry.ref}
+                    aria-label={"Remove #{entry.client_name}"}
+                    title="Remove file"
+                    class="inline-flex size-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-white hover:text-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2"
+                  >
+                    <.icon name="hero-x-mark" class="size-4" />
+                  </button>
+                </div>
               </div>
               <p
                 :for={error <- upload_errors(@uploads.csv, entry)}
