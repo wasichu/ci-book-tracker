@@ -29,6 +29,7 @@ defmodule CiBookTrackerWeb.DashboardLive do
        |> assign(:page_title, reading_log.name)
        |> assign(:search_query, "")
        |> assign(:status_filter, :all)
+       |> assign(:difficulty_filter, :all)
        |> assign_dashboard(reading_log)}
     else
       {:ok,
@@ -50,6 +51,13 @@ defmodule CiBookTrackerWeb.DashboardLive do
     {:noreply,
      socket
      |> assign(:status_filter, parse_status_filter(status))
+     |> apply_book_filters()}
+  end
+
+  def handle_event("filter_difficulty", %{"difficulty" => difficulty}, socket) do
+    {:noreply,
+     socket
+     |> assign(:difficulty_filter, parse_difficulty_filter(difficulty, socket.assigns))
      |> apply_book_filters()}
   end
 
@@ -241,6 +249,43 @@ defmodule CiBookTrackerWeb.DashboardLive do
                 </button>
               </div>
             </div>
+
+            <div :if={@difficulty_options != []}>
+              <p class="text-sm font-semibold text-slate-700">Filter by difficulty</p>
+              <div class="mt-3 flex flex-wrap gap-2" aria-label="Filter books by difficulty">
+                <button
+                  id="filter-difficulty-all"
+                  type="button"
+                  phx-click="filter_difficulty"
+                  phx-value-difficulty="all"
+                  aria-pressed={@difficulty_filter == :all}
+                  class={[
+                    "inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2",
+                    @difficulty_filter == :all && "bg-slate-950 text-white shadow-sm",
+                    @difficulty_filter != :all &&
+                      "bg-slate-100 text-slate-700 hover:bg-amber-100 hover:text-amber-950"
+                  ]}
+                >
+                  All difficulties
+                </button>
+                <button
+                  :for={{difficulty, index} <- Enum.with_index(@difficulty_options)}
+                  id={"filter-difficulty-#{index}"}
+                  type="button"
+                  phx-click="filter_difficulty"
+                  phx-value-difficulty={difficulty}
+                  aria-pressed={@difficulty_filter == difficulty}
+                  class={[
+                    "inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2",
+                    @difficulty_filter == difficulty && "bg-slate-950 text-white shadow-sm",
+                    @difficulty_filter != difficulty &&
+                      "bg-slate-100 text-slate-700 hover:bg-amber-100 hover:text-amber-950"
+                  ]}
+                >
+                  {difficulty}
+                </button>
+              </div>
+            </div>
           </div>
 
           <div
@@ -252,7 +297,9 @@ defmodule CiBookTrackerWeb.DashboardLive do
               <.icon name="hero-magnifying-glass" class="size-5" />
             </span>
             <p class="mt-3 font-semibold text-slate-800">No books match this search.</p>
-            <p class="mt-1 text-sm text-slate-500">Try another title, author, or status.</p>
+            <p class="mt-1 text-sm text-slate-500">
+              Try another title, author, status, or difficulty.
+            </p>
           </div>
 
           <section
@@ -427,6 +474,7 @@ defmodule CiBookTrackerWeb.DashboardLive do
       books_by_status: empty_books_by_status(),
       status_groups: @status_groups,
       status_filters: @status_filters,
+      difficulty_options: [],
       filtering?: false,
       matching_book_count: 0,
       summary: empty_summary()
@@ -448,6 +496,7 @@ defmodule CiBookTrackerWeb.DashboardLive do
       all_books: books,
       status_groups: @status_groups,
       status_filters: @status_filters,
+      difficulty_options: difficulty_options(books),
       summary: summarize(books, reading_log.word_goal)
     )
     |> apply_book_filters()
@@ -533,18 +582,25 @@ defmodule CiBookTrackerWeb.DashboardLive do
   defp apply_book_filters(socket) do
     query = socket.assigns.search_query |> String.downcase()
     status_filter = socket.assigns.status_filter
+    difficulty_filter = socket.assigns.difficulty_filter
 
     books =
       Enum.filter(socket.assigns.all_books, fn book ->
         status_matches? = status_filter == :all || book.status == status_filter
         search_matches? = query == "" || book_matches_search?(book, query)
-        status_matches? && search_matches?
+
+        difficulty_matches? =
+          difficulty_filter == :all ||
+            normalized_difficulty(book.difficulty_label) ==
+              normalized_difficulty(difficulty_filter)
+
+        status_matches? && search_matches? && difficulty_matches?
       end)
 
     assign(socket,
       books_by_status:
         Map.merge(empty_books_by_status(), Enum.group_by(books, & &1.status, & &1)),
-      filtering?: query != "" || status_filter != :all,
+      filtering?: query != "" || status_filter != :all || difficulty_filter != :all,
       matching_book_count: length(books)
     )
   end
@@ -559,6 +615,27 @@ defmodule CiBookTrackerWeb.DashboardLive do
   defp parse_status_filter("finished"), do: :finished
   defp parse_status_filter("abandoned"), do: :abandoned
   defp parse_status_filter(_status), do: :all
+
+  defp parse_difficulty_filter("all", _assigns), do: :all
+
+  defp parse_difficulty_filter(difficulty, assigns) do
+    Enum.find(assigns.difficulty_options, :all, fn option ->
+      normalized_difficulty(option) == normalized_difficulty(difficulty)
+    end)
+  end
+
+  defp difficulty_options(books) do
+    books
+    |> Enum.map(& &1.difficulty_label)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.uniq_by(&normalized_difficulty/1)
+    |> Enum.sort_by(&normalized_difficulty/1)
+  end
+
+  defp normalized_difficulty(value),
+    do: value |> to_string() |> String.trim() |> String.downcase()
 
   defp update_book_status(book, "start"), do: Library.start_book(book)
   defp update_book_status(book, "finish"), do: Library.finish_book(book)

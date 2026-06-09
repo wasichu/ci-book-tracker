@@ -217,6 +217,43 @@ defmodule CiBookTrackerWeb.DashboardLiveTest do
     refute has_element?(view, "#books-want_to_read")
   end
 
+  test "filters by distinct difficulty values and combines with status", %{conn: conn} do
+    reading_log = Library.create_reading_log!("Spanish", "es", nil)
+
+    a1_wanted =
+      Library.add_book!(reading_log.id, "A1 Starter", %{difficulty_label: "A1"})
+
+    a1_reading =
+      reading_log.id
+      |> Library.add_book!("A1 Reader", %{difficulty_label: "A1"})
+      |> Library.start_book!()
+
+    b1_reading =
+      reading_log.id
+      |> Library.add_book!("B1 Reader", %{difficulty_label: "B1"})
+      |> Library.start_book!()
+
+    {:ok, view, _html} = live(active_log(conn, reading_log), ~p"/dashboard")
+
+    assert has_element?(view, "[aria-label='Filter books by difficulty']")
+    assert has_element?(view, "button[phx-value-difficulty='A1']", "A1")
+    assert has_element?(view, "button[phx-value-difficulty='B1']", "B1")
+
+    view
+    |> element("button[phx-value-difficulty='A1']")
+    |> render_click()
+
+    assert has_element?(view, "#book-#{a1_wanted.id}")
+    assert has_element?(view, "#book-#{a1_reading.id}")
+    refute has_element?(view, "#book-#{b1_reading.id}")
+
+    view |> element("#filter-in_progress") |> render_click()
+
+    refute has_element?(view, "#book-#{a1_wanted.id}")
+    assert has_element?(view, "#book-#{a1_reading.id}")
+    refute has_element?(view, "#book-#{b1_reading.id}")
+  end
+
   test "shows a friendly empty state when no books match", %{conn: conn} do
     reading_log = Library.create_reading_log!("Spanish", "es", nil)
     Library.add_book!(reading_log.id, "El Principito")
