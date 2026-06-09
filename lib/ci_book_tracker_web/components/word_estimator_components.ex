@@ -103,14 +103,27 @@ defmodule CiBookTrackerWeb.WordEstimatorComponents do
         </p>
 
         <div
-          :if={@result.estimated_words}
+          :if={@result.estimated_words && @result.estimated_words > 0}
           id="sample-estimated-words"
-          class="rounded-xl border border-amber-200 bg-amber-50 p-4"
+          class="flex items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 p-4"
         >
-          <p class="text-sm font-medium text-amber-900/70">Estimated total words</p>
-          <p class="mt-1 text-2xl font-semibold tracking-tight text-amber-950">
-            {BookFormat.number(@result.estimated_words)}
-          </p>
+          <div>
+            <p class="text-sm font-medium text-amber-900/70">Estimated total words</p>
+            <p class="mt-1 text-2xl font-semibold tracking-tight text-amber-950">
+              {BookFormat.number(@result.estimated_words)}
+            </p>
+          </div>
+
+          <button
+            id="copy-word-estimate"
+            type="button"
+            phx-hook="ClipboardCopy"
+            data-copy-text={@result.estimated_words}
+            class="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-amber-300 bg-white px-4 text-sm font-semibold text-amber-950 transition hover:border-amber-400 hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2"
+          >
+            <.icon name="hero-clipboard-document" class="size-4" />
+            <span data-copy-label>Copy</span>
+          </button>
         </div>
 
         <div :if={@apply_event}>

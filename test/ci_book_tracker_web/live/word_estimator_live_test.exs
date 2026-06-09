@@ -11,6 +11,7 @@ defmodule CiBookTrackerWeb.WordEstimatorLiveTest do
     assert has_element?(view, "#word-estimate-helper", "The sample is never saved.")
     assert has_element?(view, "#sample-word-count", "0")
     assert has_element?(view, "#clear-word-estimate", "Clear")
+    refute has_element?(view, "#copy-word-estimate")
     refute has_element?(view, "#apply-word-estimate")
   end
 
@@ -30,6 +31,12 @@ defmodule CiBookTrackerWeb.WordEstimatorLiveTest do
 
     assert has_element?(view, "#sample-word-count", "6")
     assert has_element?(view, "#sample-estimated-words", "300")
+
+    assert has_element?(
+             view,
+             "#copy-word-estimate[phx-hook='ClipboardCopy'][data-copy-text='300']",
+             "Copy"
+           )
   end
 
   test "clears the estimator inputs and result", %{conn: conn} do
@@ -50,6 +57,7 @@ defmodule CiBookTrackerWeb.WordEstimatorLiveTest do
 
     assert has_element?(view, "#sample-word-count", "0")
     refute has_element?(view, "#sample-estimated-words")
+    refute has_element?(view, "#copy-word-estimate")
     refute has_element?(view, "#word-estimate-error")
     assert has_element?(view, "#word-estimator-form textarea[name='estimator[sample_text]']", "")
 
