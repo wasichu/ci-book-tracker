@@ -220,7 +220,8 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     |> element("button[phx-click='select_cover']")
     |> render_click()
 
-    assert has_element?(view, "#metadata-message", "Cover added to the form")
+    assert has_element?(view, "#flash-info", "Cover added to the form")
+    refute has_element?(view, "#metadata-message", "Cover added to the form")
     assert has_element?(view, "#book_title[value='My title']")
     assert has_element?(view, "#book_author[value='My author']")
     assert has_element?(view, "#book_page_count[value='123']")

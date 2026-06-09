@@ -179,6 +179,13 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
     |> render_click()
 
     refute has_element?(view, "#metadata-review")
+
+    assert has_element?(
+             view,
+             "button[form='edit-book-form'][id^='save-selected-cover-']",
+             "Save Changes"
+           )
+
     assert has_element?(view, "#book_title[value='My Saved Title']")
     assert has_element?(view, "#book_author[value='My Saved Author']")
     assert has_element?(view, "#book_page_count[value='123']")

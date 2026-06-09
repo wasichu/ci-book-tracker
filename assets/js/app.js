@@ -45,7 +45,7 @@ const AutoDismissFlash = {
     this.dismissTimer = window.setTimeout(() => {
       this.el.classList.add("opacity-0")
       this.removeTimer = window.setTimeout(() => this.el.click(), 200)
-    }, 3000)
+    }, 5000)
   },
 
   clearTimers() {

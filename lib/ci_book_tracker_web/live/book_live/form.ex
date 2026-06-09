@@ -61,6 +61,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
        |> assign(:metadata_status, :idle)
        |> assign(:metadata_message, nil)
        |> assign(:pending_metadata, nil)
+       |> assign(:selected_cover_result_id, nil)
        |> assign(:form, to_form(form_params(book), as: :book))}
     else
       _missing ->
@@ -150,7 +151,8 @@ defmodule CiBookTrackerWeb.BookLive.Form do
            |> assign(:metadata_query, query)
            |> assign(:metadata_results, search.results)
            |> assign(:metadata_status, search.status)
-           |> assign(:metadata_message, message)}
+           |> assign(:metadata_message, message)
+           |> assign(:selected_cover_result_id, nil)}
 
         {:error, reason} ->
           {:noreply,
@@ -159,7 +161,8 @@ defmodule CiBookTrackerWeb.BookLive.Form do
            |> assign(:metadata_query, query)
            |> assign(:metadata_results, [])
            |> assign(:metadata_status, :error)
-           |> assign(:metadata_message, metadata_error_message(reason))}
+           |> assign(:metadata_message, metadata_error_message(reason))
+           |> assign(:selected_cover_result_id, nil)}
       end
     end
   end
@@ -173,6 +176,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
         {:noreply,
          socket
          |> assign(:pending_metadata, result)
+         |> assign(:selected_cover_result_id, nil)
          |> assign(:metadata_status, :review)
          |> assign(
            :metadata_message,
@@ -191,6 +195,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
         {:noreply,
          socket
          |> assign(:form, to_form(params, as: :book))
+         |> assign(:selected_cover_result_id, nil)
          |> assign(:metadata_status, :selected)
          |> assign(:metadata_message, "Metadata added to the form. Review it before saving.")}
     end
@@ -208,11 +213,10 @@ defmodule CiBookTrackerWeb.BookLive.Form do
          socket
          |> assign(:form, to_form(params, as: :book))
          |> assign(:pending_metadata, nil)
+         |> assign(:selected_cover_result_id, result.id)
          |> assign(:metadata_status, :selected)
-         |> assign(
-           :metadata_message,
-           "Cover added to the form. Save the book to keep this change."
-         )}
+         |> assign(:metadata_message, nil)
+         |> put_flash(:info, "Cover added to the form. Save the book to keep this change.")}
     end
   end
 
@@ -232,6 +236,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
          socket
          |> assign(:form, to_form(params, as: :book))
          |> assign(:pending_metadata, nil)
+         |> assign(:selected_cover_result_id, nil)
          |> assign(:metadata_status, :selected)
          |> assign(
            :metadata_message,
@@ -244,6 +249,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
     {:noreply,
      socket
      |> assign(:pending_metadata, nil)
+     |> assign(:selected_cover_result_id, nil)
      |> assign(:metadata_status, :idle)
      |> assign(:metadata_message, nil)}
   end
@@ -389,6 +395,16 @@ defmodule CiBookTrackerWeb.BookLive.Form do
                     class="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-amber-400 hover:bg-amber-50 hover:text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 sm:w-auto"
                   >
                     <.icon name="hero-photo" class="size-4" /> Use cover only
+                  </button>
+                  <button
+                    :if={@selected_cover_result_id == result.id}
+                    id={"save-selected-cover-#{result.id}"}
+                    type="submit"
+                    form={form_id(@book)}
+                    phx-disable-with="Saving..."
+                    class="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 sm:w-auto"
+                  >
+                    <.icon name="hero-check" class="size-4" /> {save_label(@book)}
                   </button>
                 </div>
               </div>
