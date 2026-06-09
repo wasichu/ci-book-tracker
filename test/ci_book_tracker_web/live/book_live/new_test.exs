@@ -184,6 +184,50 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     assert book.cover_url == "https://covers.openlibrary.org/b/id/456-M.jpg"
   end
 
+  test "uses only the cover from a metadata result", %{conn: conn} do
+    {conn, _reading_log} = create_reading_log(conn)
+    {:ok, view, _html} = live(conn, ~p"/books/new")
+
+    view
+    |> form("#add-book-form",
+      book: %{title: "My title", author: "My author", page_count: "123"}
+    )
+    |> render_change()
+
+    Req.Test.allow(OpenLibrary, self(), view.pid)
+
+    Req.Test.stub(OpenLibrary, fn conn ->
+      Req.Test.json(conn, %{
+        "docs" => [
+          %{
+            "key" => "/works/OL2W",
+            "title" => "Provider title",
+            "author_name" => ["Provider author"],
+            "number_of_pages_median" => 417,
+            "cover_i" => 456
+          }
+        ]
+      })
+    end)
+
+    view
+    |> form("#metadata-search-form", metadata: %{query: "provider title"})
+    |> render_submit()
+
+    assert has_element?(view, "button[phx-click='select_cover']", "Use cover only")
+
+    view
+    |> element("button[phx-click='select_cover']")
+    |> render_click()
+
+    assert has_element?(view, "#metadata-message", "Cover added to the form")
+    assert has_element?(view, "#book_title[value='My title']")
+    assert has_element?(view, "#book_author[value='My author']")
+    assert has_element?(view, "#book_page_count[value='123']")
+    assert has_element?(view, "input[name='book[cover_provider]'][value='open_library']")
+    assert has_element?(view, "input[name='book[cover_id]'][value='456']")
+  end
+
   test "keeps manual entry available when metadata lookup fails", %{conn: conn} do
     {conn, _reading_log} = create_reading_log(conn)
     {:ok, view, _html} = live(conn, ~p"/books/new")

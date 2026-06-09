@@ -137,6 +137,70 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
     assert updated.cover_id == 999
   end
 
+  test "refreshes only the cover when requested", %{conn: conn} do
+    reading_log = Library.create_reading_log!("Spanish", "es", nil)
+
+    book =
+      Library.add_book!(reading_log.id, "My Saved Title", %{
+        author: "My Saved Author",
+        page_count: 123,
+        estimated_words: 30_750,
+        cover_provider: "google_books",
+        cover_url: "https://books.google.com/old-cover.jpg"
+      })
+
+    {:ok, view, _html} =
+      live(activate(conn, reading_log), ~p"/books/#{book.id}/edit?metadata=refresh")
+
+    Req.Test.allow(OpenLibrary, self(), view.pid)
+
+    Req.Test.stub(OpenLibrary, fn conn ->
+      Req.Test.json(conn, %{
+        "docs" => [
+          %{
+            "key" => "/works/OL99W",
+            "title" => "Provider Title",
+            "author_name" => ["Provider Author"],
+            "number_of_pages_median" => 400,
+            "cover_i" => 999
+          }
+        ]
+      })
+    end)
+
+    view
+    |> form("#metadata-search-form",
+      metadata: %{provider: "open_library", query: "My Saved Title"}
+    )
+    |> render_submit()
+
+    view
+    |> element("button[phx-click='select_cover']")
+    |> render_click()
+
+    refute has_element?(view, "#metadata-review")
+    assert has_element?(view, "#book_title[value='My Saved Title']")
+    assert has_element?(view, "#book_author[value='My Saved Author']")
+    assert has_element?(view, "#book_page_count[value='123']")
+    assert has_element?(view, "#book_estimated_words[value='30750']")
+    assert has_element?(view, "input[name='book[cover_provider]'][value='open_library']")
+    assert has_element?(view, "input[name='book[cover_id]'][value='999']")
+
+    assert {:error, {:live_redirect, %{to: path}}} =
+             view |> form("#edit-book-form") |> render_submit()
+
+    assert path == "/books/#{book.id}"
+
+    updated = Library.get_book!(book.id)
+    assert updated.title == "My Saved Title"
+    assert updated.author == "My Saved Author"
+    assert updated.page_count == 123
+    assert updated.estimated_words == 30_750
+    assert updated.cover_provider == "open_library"
+    assert updated.cover_id == 999
+    assert updated.cover_url == "https://covers.openlibrary.org/b/id/999-M.jpg"
+  end
+
   test "shows a medium Open Library cover on the detail page", %{conn: conn} do
     reading_log = Library.create_reading_log!("Spanish", "es", nil)
 

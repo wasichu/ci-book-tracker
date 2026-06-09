@@ -186,15 +186,33 @@ defmodule CiBookTrackerWeb.BookLive.Form do
           |> put_if_present("author", result.author)
           |> put_if_present("page_count", result.page_count)
           |> put_metadata_estimate(result.page_count)
-          |> put_if_present("cover_url", result.cover_url)
-          |> put_if_present("cover_provider", result.cover_provider)
-          |> put_if_present("cover_id", result.cover_id)
+          |> put_cover_metadata(result)
 
         {:noreply,
          socket
          |> assign(:form, to_form(params, as: :book))
          |> assign(:metadata_status, :selected)
          |> assign(:metadata_message, "Metadata added to the form. Review it before saving.")}
+    end
+  end
+
+  def handle_event("select_cover", %{"id" => id}, socket) do
+    case Enum.find(socket.assigns.metadata_results, &(&1.id == id && &1.cover_url)) do
+      nil ->
+        {:noreply, socket}
+
+      result ->
+        params = put_cover_metadata(socket.assigns.form.params, result)
+
+        {:noreply,
+         socket
+         |> assign(:form, to_form(params, as: :book))
+         |> assign(:pending_metadata, nil)
+         |> assign(:metadata_status, :selected)
+         |> assign(
+           :metadata_message,
+           "Cover added to the form. Save the book to keep this change."
+         )}
     end
   end
 
@@ -208,9 +226,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
           socket.assigns.form.params
           |> put_if_present("page_count", result.page_count)
           |> put_metadata_estimate(result.page_count)
-          |> put_if_present("cover_url", result.cover_url)
-          |> put_if_present("cover_provider", result.cover_provider)
-          |> put_if_present("cover_id", result.cover_id)
+          |> put_cover_metadata(result)
 
         {:noreply,
          socket
@@ -355,15 +371,26 @@ defmodule CiBookTrackerWeb.BookLive.Form do
                   <span :if={result.language_code}>{String.upcase(result.language_code)}</span>
                   <span :if={result.page_count}>{result.page_count} pages</span>
                 </p>
-                <button
-                  type="button"
-                  phx-click="select_metadata"
-                  phx-value-id={result.id}
-                  class="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-100 px-4 text-sm font-semibold text-amber-950 transition hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 sm:w-auto"
-                >
-                  <.icon name="hero-arrow-down-tray" class="size-4" />
-                  {metadata_select_label(@book)}
-                </button>
+                <div class="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="button"
+                    phx-click="select_metadata"
+                    phx-value-id={result.id}
+                    class="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-100 px-4 text-sm font-semibold text-amber-950 transition hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 sm:w-auto"
+                  >
+                    <.icon name="hero-arrow-down-tray" class="size-4" />
+                    {metadata_select_label(@book)}
+                  </button>
+                  <button
+                    :if={result.cover_url}
+                    type="button"
+                    phx-click="select_cover"
+                    phx-value-id={result.id}
+                    class="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-amber-400 hover:bg-amber-50 hover:text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 sm:w-auto"
+                  >
+                    <.icon name="hero-photo" class="size-4" /> Use cover only
+                  </button>
+                </div>
               </div>
             </article>
           </div>
@@ -783,6 +810,13 @@ defmodule CiBookTrackerWeb.BookLive.Form do
 
   defp metadata_select_label(nil), do: "Use this book"
   defp metadata_select_label(_book), do: "Use this book"
+
+  defp put_cover_metadata(params, result) do
+    params
+    |> Map.put("cover_url", result.cover_url || "")
+    |> Map.put("cover_provider", result.cover_provider || "")
+    |> Map.put("cover_id", input_value(result.cover_id))
+  end
 
   defp save_label(nil), do: "Save Book"
   defp save_label(_book), do: "Save Changes"
