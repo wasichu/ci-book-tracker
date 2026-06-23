@@ -113,16 +113,20 @@ defmodule CiBookTrackerWeb.DashboardLive do
           <h1 class="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
             {@reading_log.name}
           </h1>
-          <p :if={@reading_log.word_goal} class="text-base leading-7 text-slate-600">
-            Your goal is {ReadingLogFormat.format_word_goal(@reading_log.word_goal)}. Keep moving
-            one book at a time.
-          </p>
           <p :if={is_nil(@reading_log.word_goal)} class="text-base leading-7 text-slate-600">
             Build your reading habit one book at a time.
           </p>
         </header>
 
         <div id="summary-cards" class="space-y-3">
+          <.summary_card
+            :if={@reading_log.word_goal}
+            id="word-goal-card"
+            label="Goal"
+            value={ReadingLogFormat.format_word_goal(@reading_log.word_goal)}
+            icon="hero-chat-bubble-bottom-center-text"
+            icon_class="bg-amber-100 text-amber-800"
+          />
           <.summary_card
             id="summary-books-finished"
             label="Books finished"
@@ -152,7 +156,6 @@ defmodule CiBookTrackerWeb.DashboardLive do
             icon="hero-bars-3-bottom-left"
             icon_class="bg-indigo-100 text-indigo-800"
           />
-
           <article
             :if={@reading_log.word_goal}
             id="goal-progress"

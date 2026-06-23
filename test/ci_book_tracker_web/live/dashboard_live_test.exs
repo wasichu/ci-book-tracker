@@ -28,11 +28,21 @@ defmodule CiBookTrackerWeb.DashboardLiveTest do
     {:ok, view, html} = live(conn, ~p"/dashboard")
 
     assert has_element?(view, "#dashboard", "French")
-    assert has_element?(view, "#dashboard", "100 thousand words")
+    assert has_element?(view, "#word-goal-card", "Goal")
+    assert has_element?(view, "#word-goal-card", "100 thousand words")
+    refute has_element?(view, "#word-goal-card", "100,000")
+    refute render(view) =~ "Your goal is"
     assert has_element?(view, "#summary-books-finished", "1")
     assert has_element?(view, "#words-completed", "16,000")
     assert has_element?(view, "#goal-progress", "16%")
     assert has_element?(view, "#books-finished #book-#{finished.id}", "Le Petit Prince")
+
+    {header_position, _length} = :binary.match(html, ~s(id="summary-cards"))
+    {word_goal_position, _length} = :binary.match(html, ~s(id="word-goal-card"))
+    {finished_summary_position, _length} = :binary.match(html, ~s(id="summary-books-finished"))
+
+    assert header_position < word_goal_position
+    assert word_goal_position < finished_summary_position
 
     assert has_element?(
              view,
@@ -61,6 +71,7 @@ defmodule CiBookTrackerWeb.DashboardLiveTest do
     {:ok, view, _html} = live(conn, ~p"/dashboard")
 
     assert has_element?(view, "#dashboard", "Build your reading habit one book at a time.")
+    refute has_element?(view, "#word-goal-card")
     refute has_element?(view, "#goal-progress")
     refute has_element?(view, "#summary-progress-volume")
 
