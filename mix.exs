@@ -94,7 +94,7 @@ defmodule CiBookTracker.MixProject do
         "esbuild ci_book_tracker --minify",
         "phx.digest"
       ],
-      precommit: ["compile --warning-as-errors", "deps.unlock --unused", "format", "test"],
+      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"],
       test: ["ash.setup --quiet", "test"]
     ]
   end
