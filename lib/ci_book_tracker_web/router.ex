@@ -30,6 +30,7 @@ defmodule CiBookTrackerWeb.Router do
     live "/books/:id/edit", BookLive.Form, :edit
     live "/books/:id", BookLive.Show, :show
 
+    get "/covers/:filename", BookCoverController, :show
     get "/reading-logs/:id/open", ReadingLogSessionController, :open
     delete "/reading-logs/:id", ReadingLogSessionController, :delete
     delete "/reading-log-session", ReadingLogSessionController, :switch

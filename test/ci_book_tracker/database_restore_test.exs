@@ -9,7 +9,8 @@ defmodule CiBookTracker.DatabaseRestoreTest do
     20_260_607_141_002,
     20_260_607_142_500,
     20_260_608_120_000,
-    20_260_608_131_832
+    20_260_608_131_832,
+    20_260_730_120_000
   ]
 
   test "validates compatible CI Book Tracker databases" do

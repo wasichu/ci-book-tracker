@@ -5,6 +5,11 @@ defmodule CiBookTracker.AppData do
   @database_filename "reading_log.db"
 
   def directory do
+    Application.get_env(:ci_book_tracker, :app_data_directory) ||
+      directory(:os.type(), System.user_home!(), System.get_env())
+  end
+
+  def default_directory do
     directory(:os.type(), System.user_home!(), System.get_env())
   end
 
@@ -26,11 +31,20 @@ defmodule CiBookTracker.AppData do
     Path.join(directory(), @database_filename)
   end
 
+  def cover_directory do
+    Path.join(directory(), "covers")
+  end
+
   def ensure_database_directory!(database_path \\ database_path()) do
     database_path
     |> Path.dirname()
     |> File.mkdir_p!()
 
     database_path
+  end
+
+  def ensure_cover_directory!(cover_directory \\ cover_directory()) do
+    File.mkdir_p!(cover_directory)
+    cover_directory
   end
 end

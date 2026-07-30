@@ -2,6 +2,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
   use CiBookTrackerWeb, :live_view
 
   alias CiBookTracker.Library
+  alias CiBookTracker.Library.BookCover
   alias CiBookTracker.Library.BookMetadata
   alias CiBookTracker.Library.WordEstimator
   alias CiBookTracker.Settings.MetadataProviders
@@ -14,6 +15,8 @@ defmodule CiBookTrackerWeb.BookLive.Form do
     "estimated_words" => "",
     "estimated_words_mode" => "manual",
     "cover_url" => "",
+    "cover_path" => "",
+    "cover_image_url" => "",
     "cover_provider" => "",
     "cover_id" => "",
     "difficulty_label" => "",
@@ -62,7 +65,12 @@ defmodule CiBookTrackerWeb.BookLive.Form do
        |> assign(:metadata_message, nil)
        |> assign(:pending_metadata, nil)
        |> assign(:selected_cover_result_id, nil)
-       |> assign(:form, to_form(form_params(book), as: :book))}
+       |> assign(:form, to_form(form_params(book), as: :book))
+       |> allow_upload(:cover_art,
+         accept: ~w(.jpg .jpeg .png .webp .gif),
+         max_entries: 1,
+         max_file_size: 8_000_000
+       )}
     else
       _missing ->
         {:ok,
@@ -118,7 +126,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
 
       {:noreply, assign(socket, :form, form)}
     else
-      save_book(socket, params)
+      prepare_and_save_book(socket, params)
     end
   end
 
@@ -482,6 +490,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
           class="space-y-6 rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60 sm:p-8"
         >
           <input type="hidden" name={@form[:cover_url].name} value={@form[:cover_url].value} />
+          <input type="hidden" name={@form[:cover_path].name} value={@form[:cover_path].value} />
           <input
             type="hidden"
             name={@form[:cover_provider].name}
@@ -564,6 +573,59 @@ defmodule CiBookTrackerWeb.BookLive.Form do
             apply_event="apply_word_estimate"
           />
 
+          <fieldset class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+            <legend class="px-1 text-sm font-semibold text-slate-700">Cover art</legend>
+            <div class="mt-4 grid gap-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+              <div class="space-y-4">
+                <.input
+                  field={@form[:cover_image_url]}
+                  type="url"
+                  label="Cover image URL"
+                  placeholder="https://m.media-amazon.com/images/I/71WLpK0hFYL._SL1499_.jpg"
+                  autocomplete="off"
+                />
+                <div>
+                  <label
+                    for={@uploads.cover_art.ref}
+                    class="block text-sm font-semibold leading-6 text-slate-900"
+                  >
+                    Upload cover image
+                  </label>
+                  <.live_file_input
+                    upload={@uploads.cover_art}
+                    class="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm text-slate-700 file:mr-4 file:rounded-lg file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+                  />
+                  <p class="mt-2 text-xs leading-5 text-slate-500">
+                    JPG, PNG, WebP, or GIF up to 8 MB. Uploaded files take precedence over URLs.
+                  </p>
+                  <p
+                    :for={entry <- @uploads.cover_art.entries}
+                    id={"cover-upload-#{entry.ref}"}
+                    class="mt-2 text-xs font-medium text-slate-600"
+                  >
+                    {entry.client_name} · {entry.progress}%
+                  </p>
+                  <p
+                    :for={error <- upload_errors(@uploads.cover_art)}
+                    class="mt-2 text-xs font-semibold text-red-700"
+                  >
+                    {cover_upload_error(error)}
+                  </p>
+                </div>
+              </div>
+
+              <.book_cover
+                id="cover-preview"
+                title={cover_preview_title(@form)}
+                cover_path={@form[:cover_path].value}
+                cover_url={cover_preview_url(@form)}
+                cover_provider={@form[:cover_provider].value}
+                cover_id={cover_preview_id(@form[:cover_id].value)}
+                size={:detail}
+              />
+            </div>
+          </fieldset>
+
           <.input
             field={@form[:difficulty_label]}
             label="Difficulty"
@@ -619,6 +681,58 @@ defmodule CiBookTrackerWeb.BookLive.Form do
     """
   end
 
+  defp prepare_and_save_book(socket, params) do
+    case store_cover(socket, params) do
+      {:ok, params} ->
+        save_book(socket, params)
+
+      {:error, reason} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, cover_error_message(reason))
+         |> assign(:form, to_form(params, as: :book, action: :validate))}
+    end
+  end
+
+  defp store_cover(socket, params) do
+    case consume_uploaded_entries(socket, :cover_art, fn %{path: path}, entry ->
+           {:ok, BookCover.store_upload(path, entry.client_name)}
+         end) do
+      [{:ok, %{cover_path: cover_path}}] ->
+        {:ok,
+         params
+         |> Map.put("cover_path", cover_path)
+         |> Map.put("cover_url", "")
+         |> Map.put("cover_provider", "local")
+         |> Map.put("cover_id", "")}
+
+      [] ->
+        store_cover_url(params)
+
+      [{:error, reason} | _rest] ->
+        {:error, reason}
+    end
+  end
+
+  defp store_cover_url(params) do
+    case params["cover_image_url"] |> to_string() |> String.trim() do
+      "" ->
+        {:ok, params}
+
+      cover_url ->
+        case BookCover.store_url(cover_url) do
+          {:ok, %{cover_path: cover_path, cover_url: stored_url}} ->
+            {:ok,
+             params
+             |> Map.put("cover_path", cover_path)
+             |> Map.put("cover_url", stored_url)}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
+    end
+  end
+
   defp save_book(socket, params) do
     case persist_book(socket.assigns.book, socket.assigns.reading_log, params) do
       {:ok, book} ->
@@ -650,6 +764,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
       "page_count",
       "estimated_words",
       "cover_url",
+      "cover_path",
       "cover_provider",
       "cover_id",
       "difficulty_label",
@@ -782,6 +897,8 @@ defmodule CiBookTrackerWeb.BookLive.Form do
       "estimated_words" => input_value(book.estimated_words),
       "estimated_words_mode" => "manual",
       "cover_url" => book.cover_url || "",
+      "cover_path" => book.cover_path || "",
+      "cover_image_url" => "",
       "cover_provider" => book.cover_provider || "",
       "cover_id" => input_value(book.cover_id),
       "difficulty_label" => book.difficulty_label || "",
@@ -830,9 +947,44 @@ defmodule CiBookTrackerWeb.BookLive.Form do
   defp put_cover_metadata(params, result) do
     params
     |> Map.put("cover_url", result.cover_url || "")
+    |> Map.put("cover_image_url", result.cover_url || "")
+    |> Map.put("cover_path", "")
     |> Map.put("cover_provider", result.cover_provider || "")
     |> Map.put("cover_id", input_value(result.cover_id))
   end
+
+  defp cover_preview_url(form) do
+    case form[:cover_image_url].value do
+      value when is_binary(value) and value != "" -> value
+      _blank -> form[:cover_url].value
+    end
+  end
+
+  defp cover_preview_title(form) do
+    case form[:title].value do
+      value when is_binary(value) and value != "" -> value
+      _blank -> "Selected cover"
+    end
+  end
+
+  defp cover_preview_id(value) do
+    case parse_positive_integer(value) do
+      {:ok, cover_id} -> cover_id
+      :error -> nil
+    end
+  end
+
+  defp cover_upload_error(:too_large), do: "Choose an image smaller than 8 MB."
+  defp cover_upload_error(:not_accepted), do: "Choose a JPG, PNG, WebP, or GIF image."
+  defp cover_upload_error(_error), do: "The cover image could not be uploaded."
+
+  defp cover_error_message(:invalid_url), do: "Enter a valid http or https cover image URL."
+  defp cover_error_message(:download_failed), do: "We couldn't download that cover image."
+  defp cover_error_message(:timeout), do: "The cover image took too long to download."
+  defp cover_error_message(:unsupported_type), do: "Choose a JPG, PNG, WebP, or GIF cover image."
+  defp cover_error_message(:too_large), do: "Choose a cover image smaller than 8 MB."
+  defp cover_error_message(:empty), do: "Choose a cover image that is not empty."
+  defp cover_error_message(_reason), do: "We couldn't store that cover image."
 
   defp save_label(nil), do: "Save Book"
   defp save_label(_book), do: "Save Changes"

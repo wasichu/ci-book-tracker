@@ -87,6 +87,7 @@ defmodule CiBookTrackerWeb.BookLive.Show do
             <.book_cover
               id="book-detail-cover"
               title={@book.title}
+              cover_path={@book.cover_path}
               cover_url={@book.cover_url}
               cover_provider={@book.cover_provider}
               cover_id={@book.cover_id}

@@ -9,6 +9,13 @@ config :ci_book_tracker, CiBookTracker.Repo,
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: 10
 
+config :ci_book_tracker,
+  app_data_directory:
+    Path.expand(
+      "../tmp/ci_book_tracker_test_data#{System.get_env("MIX_TEST_PARTITION")}",
+      __DIR__
+    )
+
 config :ash, policies: [show_policy_breakdowns?: true], disable_async?: true
 
 # We don't run a server during test. If one is required,
@@ -26,6 +33,9 @@ config :ci_book_tracker, CiBookTracker.Library.BookMetadata.GoogleBooks,
 
 config :ci_book_tracker, CiBookTracker.Library.BookMetadata.Hardcover,
   request_options: [plug: {Req.Test, CiBookTracker.Library.BookMetadata.Hardcover}]
+
+config :ci_book_tracker, CiBookTracker.Library.BookCover,
+  request_options: [plug: {Req.Test, CiBookTracker.Library.BookCover}]
 
 # Print only warnings and errors during test
 config :logger, level: :warning

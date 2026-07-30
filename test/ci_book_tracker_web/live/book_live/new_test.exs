@@ -4,6 +4,7 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
   import Phoenix.LiveViewTest
 
   alias CiBookTracker.Library
+  alias CiBookTracker.Library.BookCover
   alias CiBookTracker.Library.BookMetadata.{GoogleBooks, OpenLibrary}
 
   test "requires a reading log", %{conn: conn} do
@@ -100,6 +101,7 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     {:ok, view, _html} = live(conn, ~p"/books/new")
 
     Req.Test.allow(OpenLibrary, self(), view.pid)
+    Req.Test.allow(BookCover, self(), view.pid)
 
     Req.Test.stub(OpenLibrary, fn conn ->
       Req.Test.json(conn, %{
@@ -116,6 +118,12 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
           }
         ]
       })
+    end)
+
+    Req.Test.stub(BookCover, fn conn ->
+      conn
+      |> Plug.Conn.put_resp_content_type("image/jpeg")
+      |> Plug.Conn.resp(200, "cover")
     end)
 
     view
@@ -149,6 +157,7 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     {:ok, view, _html} = live(conn, ~p"/books/new")
 
     Req.Test.allow(OpenLibrary, self(), view.pid)
+    Req.Test.allow(BookCover, self(), view.pid)
 
     Req.Test.stub(OpenLibrary, fn conn ->
       Req.Test.json(conn, %{
@@ -162,6 +171,12 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
       })
     end)
 
+    Req.Test.stub(BookCover, fn conn ->
+      conn
+      |> Plug.Conn.put_resp_content_type("image/jpeg")
+      |> Plug.Conn.resp(200, "cover")
+    end)
+
     view
     |> form("#metadata-search-form", metadata: %{query: "solitude"})
     |> render_submit()
@@ -171,7 +186,15 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     |> render_click()
 
     view
-    |> form("#add-book-form")
+    |> form("#add-book-form",
+      book: %{
+        title: "Cien anos de soledad",
+        cover_url: "https://covers.openlibrary.org/b/id/456-M.jpg",
+        cover_image_url: "https://covers.openlibrary.org/b/id/456-M.jpg",
+        cover_provider: "open_library",
+        cover_id: "456"
+      }
+    )
     |> render_submit()
 
     [book] =
@@ -182,6 +205,68 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     assert book.cover_provider == "open_library"
     assert book.cover_id == 456
     assert book.cover_url == "https://covers.openlibrary.org/b/id/456-M.jpg"
+    assert book.cover_path =~ ".jpg"
+    assert File.regular?(BookCover.local_path(book.cover_path))
+  end
+
+  test "downloads a manual cover URL when saving a book", %{conn: conn} do
+    {conn, reading_log} = create_reading_log(conn)
+    {:ok, view, _html} = live(conn, ~p"/books/new")
+
+    Req.Test.allow(BookCover, self(), view.pid)
+
+    Req.Test.stub(BookCover, fn conn ->
+      conn
+      |> Plug.Conn.put_resp_content_type("image/jpeg")
+      |> Plug.Conn.resp(200, "manual cover")
+    end)
+
+    view
+    |> form("#add-book-form",
+      book: %{
+        title: "Manual cover",
+        cover_image_url: "https://example.com/manual-cover.jpg"
+      }
+    )
+    |> render_submit()
+
+    [book] =
+      Library.list_books!(
+        query: [filter: [reading_log_id: reading_log.id, title: "Manual cover"]]
+      )
+
+    assert book.cover_url == "https://example.com/manual-cover.jpg"
+    assert book.cover_path =~ ".jpg"
+    assert File.regular?(BookCover.local_path(book.cover_path))
+  end
+
+  test "uploads cover art when saving a book", %{conn: conn} do
+    {conn, reading_log} = create_reading_log(conn)
+    {:ok, view, _html} = live(conn, ~p"/books/new")
+
+    upload =
+      file_input(view, "#add-book-form", :cover_art, [
+        %{
+          name: "cover.png",
+          content: "uploaded cover",
+          type: "image/png"
+        }
+      ])
+
+    assert render_upload(upload, "cover.png") =~ "100%"
+
+    view
+    |> form("#add-book-form", book: %{title: "Uploaded cover"})
+    |> render_submit()
+
+    [book] =
+      Library.list_books!(
+        query: [filter: [reading_log_id: reading_log.id, title: "Uploaded cover"]]
+      )
+
+    assert book.cover_provider == "local"
+    assert book.cover_path =~ ".png"
+    assert File.regular?(BookCover.local_path(book.cover_path))
   end
 
   test "uses only the cover from a metadata result", %{conn: conn} do

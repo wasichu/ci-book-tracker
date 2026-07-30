@@ -121,10 +121,11 @@ defmodule CiBookTrackerWeb.CoreComponents do
   end
 
   @doc """
-  Renders a remote book cover or a stable placeholder.
+  Renders a local or remote book cover, falling back to a stable placeholder.
   """
   attr :id, :string, default: nil
   attr :title, :string, required: true
+  attr :cover_path, :string, default: nil
   attr :cover_url, :string, default: nil
   attr :cover_provider, :string, default: nil
   attr :cover_id, :integer, default: nil
@@ -165,6 +166,10 @@ defmodule CiBookTrackerWeb.CoreComponents do
       </div>
     </div>
     """
+  end
+
+  defp cover_src(%{cover_path: cover_path}) when is_binary(cover_path) and cover_path != "" do
+    CiBookTracker.Library.BookCover.public_path(cover_path)
   end
 
   defp cover_src(%{cover_provider: "open_library", cover_id: cover_id, size: size})

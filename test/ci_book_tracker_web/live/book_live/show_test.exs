@@ -4,6 +4,7 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
   import Phoenix.LiveViewTest
 
   alias CiBookTracker.Library
+  alias CiBookTracker.Library.BookCover
   alias CiBookTracker.Library.BookMetadata.OpenLibrary
 
   test "requires an active reading log", %{conn: conn} do
@@ -78,6 +79,7 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
            )
 
     Req.Test.allow(OpenLibrary, self(), view.pid)
+    Req.Test.allow(BookCover, self(), view.pid)
 
     Req.Test.stub(OpenLibrary, fn conn ->
       Req.Test.json(conn, %{
@@ -91,6 +93,12 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
           }
         ]
       })
+    end)
+
+    Req.Test.stub(BookCover, fn conn ->
+      conn
+      |> Plug.Conn.put_resp_content_type("image/jpeg")
+      |> Plug.Conn.resp(200, "cover")
     end)
 
     view
@@ -135,6 +143,7 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
     assert updated.estimated_words == 40_000
     assert updated.cover_provider == "open_library"
     assert updated.cover_id == 999
+    assert updated.cover_path =~ ".jpg"
   end
 
   test "refreshes only the cover when requested", %{conn: conn} do
@@ -153,6 +162,7 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
       live(activate(conn, reading_log), ~p"/books/#{book.id}/edit?metadata=refresh")
 
     Req.Test.allow(OpenLibrary, self(), view.pid)
+    Req.Test.allow(BookCover, self(), view.pid)
 
     Req.Test.stub(OpenLibrary, fn conn ->
       Req.Test.json(conn, %{
@@ -166,6 +176,12 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
           }
         ]
       })
+    end)
+
+    Req.Test.stub(BookCover, fn conn ->
+      conn
+      |> Plug.Conn.put_resp_content_type("image/jpeg")
+      |> Plug.Conn.resp(200, "cover")
     end)
 
     view
@@ -206,6 +222,7 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
     assert updated.cover_provider == "open_library"
     assert updated.cover_id == 999
     assert updated.cover_url == "https://covers.openlibrary.org/b/id/999-M.jpg"
+    assert updated.cover_path =~ ".jpg"
   end
 
   test "shows a medium Open Library cover on the detail page", %{conn: conn} do
@@ -223,6 +240,25 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
     assert has_element?(
              view,
              "#book-detail-cover img[src='https://covers.openlibrary.org/b/id/456-M.jpg'][alt='Cover of Cien anos de soledad']"
+           )
+  end
+
+  test "prefers a local cover on the detail page", %{conn: conn} do
+    reading_log = Library.create_reading_log!("Spanish", "es", nil)
+
+    book =
+      Library.add_book!(reading_log.id, "Local cover", %{
+        cover_provider: "open_library",
+        cover_id: 456,
+        cover_url: "https://covers.openlibrary.org/b/id/456-M.jpg",
+        cover_path: "local-cover.jpg"
+      })
+
+    {:ok, view, _html} = live(activate(conn, reading_log), ~p"/books/#{book.id}")
+
+    assert has_element?(
+             view,
+             "#book-detail-cover img[src='/covers/local-cover.jpg'][alt='Cover of Local cover']"
            )
   end
 
