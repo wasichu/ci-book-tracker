@@ -7,15 +7,15 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
   def mount(_params, _session, socket) do
     {:ok,
      socket
-     |> assign(:page_title, "Restore database")
+     |> assign(:page_title, "Restore backup")
      |> assign(:staged_path, nil)
      |> assign(:uploaded_name, nil)
      |> assign(:validation_error, nil)
      |> assign(:restore_result, nil)
      |> allow_upload(:database,
-       accept: [".db", ".sqlite", ".sqlite3"],
+       accept: [".zip", ".db", ".sqlite", ".sqlite3"],
        max_entries: 1,
-       max_file_size: 100_000_000
+       max_file_size: 250_000_000
      )}
   end
 
@@ -62,11 +62,11 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
      |> assign(:validation_error, nil)}
   end
 
-  def handle_event("restore_database", _params, %{assigns: %{staged_path: path}} = socket)
-      when is_binary(path) do
-    case DatabaseRestore.restore(path) do
+  def handle_event("restore_database", _params, %{assigns: %{staged_path: staged}} = socket)
+      when not is_nil(staged) do
+    case DatabaseRestore.restore(staged) do
       {:ok, result} ->
-        cleanup_staged_file(path)
+        cleanup_staged_file(staged)
 
         {:noreply,
          socket
@@ -104,10 +104,10 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
             Destructive action
           </p>
           <h1 class="mt-2 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-            Restore database
+            Restore backup
           </h1>
           <p class="mt-3 max-w-2xl text-base leading-7 text-slate-600">
-            Replace this installation with a previously exported CI Book Tracker database.
+            Replace this installation with a previously exported CI Book Tracker backup.
           </p>
         </header>
 
@@ -141,8 +141,10 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
               class="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-5 text-center transition hover:border-rose-400 hover:bg-rose-50/50"
             >
               <.icon name="hero-circle-stack" class="size-7 text-slate-500" />
-              <span class="mt-3 font-semibold text-slate-900">Select a SQLite database</span>
-              <span class="mt-1 text-sm text-slate-500">.db, .sqlite, or .sqlite3 up to 100 MB</span>
+              <span class="mt-3 font-semibold text-slate-900">Select a backup</span>
+              <span class="mt-1 text-sm text-slate-500">
+                .zip, .db, .sqlite, or .sqlite3 up to 250 MB
+              </span>
               <.live_file_input upload={@uploads.database} class="sr-only" />
             </label>
 
@@ -172,7 +174,7 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
               phx-disable-with="Validating..."
               class="flex min-h-12 w-full items-center justify-center rounded-xl bg-slate-950 px-5 font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2 sm:w-auto"
             >
-              Validate database
+              Validate backup
             </.button>
           </.form>
         </section>
@@ -188,7 +190,7 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
             </span>
             <div>
               <p class="text-xs font-semibold uppercase tracking-[0.16em] text-rose-700">
-                Database validated
+                Backup validated
               </p>
               <h2 class="mt-1 text-xl font-semibold text-rose-950">Confirm full replacement</h2>
               <p class="mt-2 break-all text-sm font-medium text-rose-900">{@uploaded_name}</p>
@@ -196,8 +198,8 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
           </div>
 
           <p class="mt-5 text-base font-semibold leading-7 text-rose-950">
-            This will replace your current reading logs, books, settings, and metadata provider
-            configuration.
+            This will replace your current reading logs, books, settings, metadata provider
+            configuration, and locally stored cover art.
           </p>
           <p class="mt-2 text-sm leading-6 text-rose-900">
             This is a full database replacement. Data from the two databases will not be merged.
@@ -220,10 +222,10 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
               type="button"
               id="confirm-restore"
               phx-click="restore_database"
-              data-confirm="Restore this database and replace all current data?"
+              data-confirm="Restore this backup and replace all current data?"
               class="min-h-14 rounded-2xl bg-rose-700 px-5 font-semibold text-white shadow-lg shadow-rose-900/15 transition hover:bg-rose-800 focus:outline-none focus:ring-2 focus:ring-rose-600 focus:ring-offset-2"
             >
-              Restore Database
+              Restore Backup
             </button>
           </div>
         </section>
@@ -249,11 +251,10 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
     """
   end
 
-  defp cleanup_staged_file(nil), do: :ok
-  defp cleanup_staged_file(path), do: File.rm(path)
+  defp cleanup_staged_file(staged), do: DatabaseRestore.cleanup_stage(staged)
 
-  defp upload_error(:too_large), do: "The database is larger than 100 MB."
-  defp upload_error(:not_accepted), do: "Choose a .db, .sqlite, or .sqlite3 file."
-  defp upload_error(:too_many_files), do: "Choose only one database file."
-  defp upload_error(_error), do: "The database could not be uploaded."
+  defp upload_error(:too_large), do: "The backup is larger than 250 MB."
+  defp upload_error(:not_accepted), do: "Choose a .zip, .db, .sqlite, or .sqlite3 file."
+  defp upload_error(:too_many_files), do: "Choose only one backup file."
+  defp upload_error(_error), do: "The backup could not be uploaded."
 end

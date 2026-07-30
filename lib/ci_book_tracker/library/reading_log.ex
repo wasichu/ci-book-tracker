@@ -22,6 +22,8 @@ defmodule CiBookTracker.Library.ReadingLog do
 
     destroy :destroy do
       primary? true
+      require_atomic? false
+      change CiBookTracker.Library.ReadingLog.Changes.RemoveBookCoverFiles
     end
   end
 

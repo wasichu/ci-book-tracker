@@ -50,16 +50,19 @@ defmodule CiBookTracker.Library.BookCoverTest do
     reading_log = Library.create_reading_log!("Spanish", "es", nil)
 
     remote_book =
-      Library.add_book!(reading_log.id, "Remote cover", %{
+      reading_log.id
+      |> Library.add_book!("Remote cover")
+      |> put_legacy_cover(%{
         cover_url: "https://example.com/remote.jpg",
         cover_provider: "open_library",
         cover_id: 123
       })
 
     local_book =
-      Library.add_book!(reading_log.id, "Local cover", %{
+      Library.add_book_with_cover!(reading_log.id, "Local cover", %{
         cover_url: "https://example.com/local.jpg",
-        cover_path: "already-local.jpg"
+        cover_path: "already-local.jpg",
+        cover_provider: "open_library"
       })
 
     Req.Test.stub(BookCover, fn conn ->
@@ -79,5 +82,89 @@ defmodule CiBookTracker.Library.BookCoverTest do
     assert updated_remote.cover_id == 123
     assert File.read!(BookCover.local_path(updated_remote.cover_path)) == "backfilled cover"
     assert updated_local.cover_path == "already-local.jpg"
+  end
+
+  test "replacing and removing a cover cleans up stored files" do
+    reading_log = Library.create_reading_log!("Spanish", "es", nil)
+    old_path = "old-#{System.unique_integer([:positive])}.jpg"
+    new_path = "new-#{System.unique_integer([:positive])}.jpg"
+    File.mkdir_p!(CiBookTracker.AppData.cover_directory())
+    File.write!(BookCover.local_path(old_path), "old")
+    File.write!(BookCover.local_path(new_path), "new")
+
+    book =
+      Library.add_book_with_cover!(reading_log.id, "Covered", %{
+        cover_path: old_path,
+        cover_provider: "local"
+      })
+
+    assert {:ok, updated} =
+             BookCover.attach(book, %{
+               cover_path: new_path,
+               cover_provider: "local",
+               cover_url: nil,
+               cover_id: nil
+             })
+
+    refute File.exists?(BookCover.local_path(old_path))
+    assert File.exists?(BookCover.local_path(new_path))
+
+    assert {:ok, without_cover} = Library.remove_book_cover(updated)
+    assert is_nil(without_cover.cover_path)
+    refute File.exists?(BookCover.local_path(new_path))
+  end
+
+  test "deleting a book or reading log removes its local covers" do
+    first_log = Library.create_reading_log!("Spanish", "es", nil)
+    second_log = Library.create_reading_log!("French", "fr", nil)
+    first_path = "delete-book-#{System.unique_integer([:positive])}.jpg"
+    second_path = "delete-log-#{System.unique_integer([:positive])}.jpg"
+    File.mkdir_p!(CiBookTracker.AppData.cover_directory())
+    File.write!(BookCover.local_path(first_path), "first")
+    File.write!(BookCover.local_path(second_path), "second")
+
+    first_book =
+      Library.add_book_with_cover!(first_log.id, "First", %{
+        cover_path: first_path,
+        cover_provider: "local"
+      })
+
+    Library.add_book_with_cover!(second_log.id, "Second", %{
+      cover_path: second_path,
+      cover_provider: "local"
+    })
+
+    assert :ok = Library.delete_book(first_book)
+    refute File.exists?(BookCover.local_path(first_path))
+
+    assert :ok = Library.delete_reading_log(second_log)
+    refute File.exists?(BookCover.local_path(second_path))
+  end
+
+  test "a rejected attachment removes the newly stored file" do
+    reading_log = Library.create_reading_log!("Spanish", "es", nil)
+    book = Library.add_book!(reading_log.id, "Covered")
+    new_path = "invalid-#{System.unique_integer([:positive])}.jpg"
+    File.mkdir_p!(CiBookTracker.AppData.cover_directory())
+    File.write!(BookCover.local_path(new_path), "new")
+
+    assert {:error, _error} =
+             BookCover.attach(book, %{
+               cover_path: new_path,
+               cover_provider: "local",
+               cover_url: "https://example.com/not-local.jpg"
+             })
+
+    refute File.exists?(BookCover.local_path(new_path))
+  end
+
+  defp put_legacy_cover(book, attributes) do
+    changeset = Ash.Changeset.for_update(book, :edit)
+
+    attributes
+    |> Enum.reduce(changeset, fn {attribute, value}, changeset ->
+      Ash.Changeset.force_change_attribute(changeset, attribute, value)
+    end)
+    |> Ash.update!()
   end
 end

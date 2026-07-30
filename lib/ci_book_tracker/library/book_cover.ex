@@ -71,6 +71,30 @@ defmodule CiBookTracker.Library.BookCover do
     end
   end
 
+  @spec remove(String.t() | nil) :: :ok
+  def remove(filename) when is_binary(filename) and filename != "" do
+    filename
+    |> local_path()
+    |> File.rm()
+
+    :ok
+  end
+
+  def remove(_filename), do: :ok
+
+  @spec attach(CiBookTracker.Library.Book.t(), map()) ::
+          {:ok, CiBookTracker.Library.Book.t()} | {:error, term()}
+  def attach(book, attributes) do
+    case Library.attach_book_cover(book, attributes) do
+      {:ok, updated_book} ->
+        {:ok, updated_book}
+
+      {:error, error} ->
+        if attributes[:cover_path] != book.cover_path, do: remove(attributes[:cover_path])
+        {:error, error}
+    end
+  end
+
   @spec backfill_remote_covers() :: %{
           downloaded: non_neg_integer(),
           skipped: non_neg_integer(),
@@ -86,7 +110,12 @@ defmodule CiBookTracker.Library.BookCover do
         true ->
           case store_url(book.cover_url) do
             {:ok, %{cover_path: cover_path}} ->
-              case Library.edit_book(book, %{cover_path: cover_path}) do
+              case attach(book, %{
+                     cover_path: cover_path,
+                     cover_url: book.cover_url,
+                     cover_provider: book.cover_provider,
+                     cover_id: book.cover_id
+                   }) do
                 {:ok, _book} -> Map.update!(totals, :downloaded, &(&1 + 1))
                 {:error, _error} -> Map.update!(totals, :failed, &(&1 + 1))
               end

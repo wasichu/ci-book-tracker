@@ -3,6 +3,20 @@ defmodule CiBookTracker.Library.Book do
     domain: CiBookTracker.Library,
     data_layer: AshSqlite.DataLayer
 
+  @editable_attributes [
+    :title,
+    :author,
+    :page_count,
+    :estimated_words,
+    :difficulty_label,
+    :status,
+    :added_on,
+    :started_on,
+    :finished_on,
+    :notes
+  ]
+  @cover_attributes [:cover_url, :cover_path, :cover_provider, :cover_id]
+
   sqlite do
     table "books"
     repo CiBookTracker.Repo
@@ -17,47 +31,37 @@ defmodule CiBookTracker.Library.Book do
 
     create :create do
       primary? true
-
-      accept [
-        :reading_log_id,
-        :title,
-        :author,
-        :page_count,
-        :estimated_words,
-        :cover_url,
-        :cover_path,
-        :cover_provider,
-        :cover_id,
-        :difficulty_label,
-        :status,
-        :added_on,
-        :started_on,
-        :finished_on,
-        :notes
-      ]
-
+      accept [:reading_log_id | @editable_attributes]
       change CiBookTracker.Library.Book.Changes.DefaultReadingDates
+    end
+
+    create :create_with_cover do
+      accept [:reading_log_id | @editable_attributes] ++ @cover_attributes
+      validate CiBookTracker.Library.Book.Validations.CoverAttachment
+      change CiBookTracker.Library.Book.Changes.DefaultReadingDates
+      change CiBookTracker.Library.Book.Changes.ManageCoverFile
     end
 
     update :edit do
       primary? true
+      accept @editable_attributes
+    end
 
-      accept [
-        :title,
-        :author,
-        :page_count,
-        :estimated_words,
-        :cover_url,
-        :cover_path,
-        :cover_provider,
-        :cover_id,
-        :difficulty_label,
-        :status,
-        :added_on,
-        :started_on,
-        :finished_on,
-        :notes
-      ]
+    update :attach_cover do
+      accept @cover_attributes
+      require_atomic? false
+      validate CiBookTracker.Library.Book.Validations.CoverAttachment
+      change CiBookTracker.Library.Book.Changes.ManageCoverFile
+    end
+
+    update :remove_cover do
+      accept []
+      require_atomic? false
+      change set_attribute(:cover_url, nil)
+      change set_attribute(:cover_path, nil)
+      change set_attribute(:cover_provider, nil)
+      change set_attribute(:cover_id, nil)
+      change CiBookTracker.Library.Book.Changes.ManageCoverFile
     end
 
     update :start do
@@ -86,7 +90,10 @@ defmodule CiBookTracker.Library.Book do
       change CiBookTracker.Library.Book.Changes.SetStartedOnIfMissing
     end
 
-    destroy :destroy
+    destroy :destroy do
+      require_atomic? false
+      change CiBookTracker.Library.Book.Changes.RemoveCoverFile
+    end
   end
 
   attributes do

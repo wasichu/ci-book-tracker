@@ -6,18 +6,18 @@ defmodule CiBookTrackerWeb.BackupLiveTest do
   test "shows database backup controls", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/backup")
 
-    assert has_element?(view, "#database-backup", "Database backup")
+    assert has_element?(view, "#database-backup", "Portable backup")
 
     assert has_element?(
              view,
              "#database-backup",
-             "Download a copy of your local database for backup."
+             "Download a portable copy of your database and locally stored cover art."
            )
 
     assert has_element?(
              view,
              "#export-database[href='/backup/database']",
-             "Export Database"
+             "Export Backup"
            )
   end
 

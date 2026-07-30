@@ -84,7 +84,9 @@ defmodule CiBookTrackerWeb.DashboardLiveTest do
     reading_log = Library.create_reading_log!("Spanish", "es", nil)
 
     covered =
-      Library.add_book!(reading_log.id, "Covered book", %{
+      reading_log.id
+      |> Library.add_book!("Covered book")
+      |> put_legacy_cover(%{
         cover_provider: "open_library",
         cover_id: 456,
         cover_url: "https://covers.openlibrary.org/b/id/456-M.jpg"
@@ -319,5 +321,15 @@ defmodule CiBookTrackerWeb.DashboardLiveTest do
 
   defp active_log(conn, reading_log) do
     init_test_session(conn, %{"active_reading_log_id" => reading_log.id})
+  end
+
+  defp put_legacy_cover(book, attributes) do
+    changeset = Ash.Changeset.for_update(book, :edit)
+
+    attributes
+    |> Enum.reduce(changeset, fn {attribute, value}, changeset ->
+      Ash.Changeset.force_change_attribute(changeset, attribute, value)
+    end)
+    |> Ash.update!()
   end
 end

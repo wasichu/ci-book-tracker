@@ -742,6 +742,8 @@ defmodule CiBookTrackerWeb.BookLive.Form do
          |> push_navigate(to: save_path(socket.assigns.book, book))}
 
       {:error, _error} ->
+        cleanup_unpersisted_cover(socket.assigns.book, params)
+
         {:noreply,
          socket
          |> put_flash(:error, "We couldn't save this book. Check the details and try again.")
@@ -750,11 +752,25 @@ defmodule CiBookTrackerWeb.BookLive.Form do
   end
 
   defp persist_book(nil, reading_log, params) do
-    Library.add_book(reading_log.id, params["title"], book_attributes(params))
+    book_attributes = book_attributes(params)
+    cover_attributes = cover_attributes(params)
+
+    if is_nil(cover_attributes.cover_path) do
+      Library.add_book(reading_log.id, params["title"], book_attributes)
+    else
+      Library.add_book_with_cover(
+        reading_log.id,
+        params["title"],
+        Map.merge(book_attributes, cover_attributes)
+      )
+    end
   end
 
   defp persist_book(book, _reading_log, params) do
-    Library.edit_book(book, Map.put(book_attributes(params), :title, params["title"]))
+    with {:ok, edited_book} <-
+           Library.edit_book(book, Map.put(book_attributes(params), :title, params["title"])) do
+      persist_cover_changes(book, edited_book, cover_attributes(params))
+    end
   end
 
   defp book_attributes(params) do
@@ -763,10 +779,6 @@ defmodule CiBookTrackerWeb.BookLive.Form do
       "author",
       "page_count",
       "estimated_words",
-      "cover_url",
-      "cover_path",
-      "cover_provider",
-      "cover_id",
       "difficulty_label",
       "status",
       "started_on",
@@ -775,6 +787,35 @@ defmodule CiBookTrackerWeb.BookLive.Form do
     ])
     |> Map.new(fn {key, value} -> {String.to_existing_atom(key), empty_to_nil(value)} end)
   end
+
+  defp cover_attributes(params) do
+    params
+    |> Map.take(["cover_url", "cover_path", "cover_provider", "cover_id"])
+    |> Map.new(fn {key, value} -> {String.to_existing_atom(key), empty_to_nil(value)} end)
+  end
+
+  defp persist_cover_changes(original_book, edited_book, cover_attributes) do
+    existing_cover =
+      Map.take(original_book, [:cover_url, :cover_path, :cover_provider, :cover_id])
+
+    cond do
+      existing_cover == cover_attributes ->
+        {:ok, edited_book}
+
+      is_nil(cover_attributes.cover_path) ->
+        Library.remove_book_cover(edited_book)
+
+      true ->
+        BookCover.attach(edited_book, cover_attributes)
+    end
+  end
+
+  defp cleanup_unpersisted_cover(book, %{"cover_path" => cover_path})
+       when is_binary(cover_path) and cover_path != "" do
+    if is_nil(book) || book.cover_path != cover_path, do: BookCover.remove(cover_path)
+  end
+
+  defp cleanup_unpersisted_cover(_book, _params), do: :ok
 
   defp sync_estimated_words(params, %CiBookTracker.Library.Book{}) do
     Map.put(params, "estimated_words_mode", "manual")

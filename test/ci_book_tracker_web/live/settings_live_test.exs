@@ -9,7 +9,13 @@ defmodule CiBookTrackerWeb.SettingsLiveTest do
     {:ok, view, _html} = live(conn, ~p"/settings")
 
     assert has_element?(view, "#settings-page", "Settings")
-    assert has_element?(view, "#database-settings", "All reading logs, books, and settings")
+
+    assert has_element?(
+             view,
+             "#database-settings",
+             "Reading logs, books, settings, and cover images"
+           )
+
     assert has_element?(view, "#settings-export-database[href='/backup/database']")
     assert has_element?(view, "#settings-restore-database[href='/settings/restore']")
     assert has_element?(view, "#open-library-settings", "Enabled")

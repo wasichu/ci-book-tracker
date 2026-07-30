@@ -3,7 +3,7 @@ defmodule CiBookTrackerWeb.BackupLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, :page_title, "Database backup")}
+    {:ok, assign(socket, :page_title, "Portable backup")}
   end
 
   @impl true
@@ -23,10 +23,10 @@ defmodule CiBookTrackerWeb.BackupLive do
             Settings
           </p>
           <h1 class="mt-2 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-            Database backup
+            Portable backup
           </h1>
           <p class="mt-3 max-w-xl text-base leading-7 text-slate-600">
-            Download a copy of your local database for backup.
+            Download a portable copy of your database and locally stored cover art.
           </p>
         </header>
 
@@ -40,8 +40,8 @@ defmodule CiBookTrackerWeb.BackupLive do
                 Export your data
               </h2>
               <p class="mt-2 text-sm leading-6 text-slate-600">
-                This downloads the complete SQLite database used by this app, including every
-                reading log, book, and reading status.
+                This downloads a ZIP archive containing the complete SQLite database and every
+                locally stored book cover.
               </p>
             </div>
           </div>
@@ -51,7 +51,7 @@ defmodule CiBookTrackerWeb.BackupLive do
             href={~p"/backup/database"}
             class="mt-7 flex min-h-16 w-full items-center justify-center gap-3 rounded-2xl bg-slate-950 px-6 text-base font-semibold text-white shadow-lg shadow-slate-900/15 transition hover:-translate-y-0.5 hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0"
           >
-            <.icon name="hero-arrow-down-tray" class="size-5" /> Export Database
+            <.icon name="hero-arrow-down-tray" class="size-5" /> Export Backup
           </.link>
 
           <p class="mt-4 text-xs leading-5 text-slate-500">

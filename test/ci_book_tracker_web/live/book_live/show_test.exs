@@ -150,10 +150,13 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
     reading_log = Library.create_reading_log!("Spanish", "es", nil)
 
     book =
-      Library.add_book!(reading_log.id, "My Saved Title", %{
+      reading_log.id
+      |> Library.add_book!("My Saved Title", %{
         author: "My Saved Author",
         page_count: 123,
-        estimated_words: 30_750,
+        estimated_words: 30_750
+      })
+      |> put_legacy_cover(%{
         cover_provider: "google_books",
         cover_url: "https://books.google.com/old-cover.jpg"
       })
@@ -229,7 +232,9 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
     reading_log = Library.create_reading_log!("Spanish", "es", nil)
 
     book =
-      Library.add_book!(reading_log.id, "Cien anos de soledad", %{
+      reading_log.id
+      |> Library.add_book!("Cien anos de soledad")
+      |> put_legacy_cover(%{
         cover_provider: "open_library",
         cover_id: 456,
         cover_url: "https://covers.openlibrary.org/b/id/456-M.jpg"
@@ -247,7 +252,7 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
     reading_log = Library.create_reading_log!("Spanish", "es", nil)
 
     book =
-      Library.add_book!(reading_log.id, "Local cover", %{
+      Library.add_book_with_cover!(reading_log.id, "Local cover", %{
         cover_provider: "open_library",
         cover_id: 456,
         cover_url: "https://covers.openlibrary.org/b/id/456-M.jpg",
@@ -415,5 +420,15 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
 
   defp activate(conn, reading_log) do
     init_test_session(conn, %{"active_reading_log_id" => reading_log.id})
+  end
+
+  defp put_legacy_cover(book, attributes) do
+    changeset = Ash.Changeset.for_update(book, :edit)
+
+    attributes
+    |> Enum.reduce(changeset, fn {attribute, value}, changeset ->
+      Ash.Changeset.force_change_attribute(changeset, attribute, value)
+    end)
+    |> Ash.update!()
   end
 end

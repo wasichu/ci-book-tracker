@@ -21,12 +21,15 @@ The application has four primary layers:
 A reading log represents one language-specific collection and can have a word
 goal. Books belong to one reading log and contain their reading status, dates,
 page count, estimated words, difficulty, notes, and optional cover metadata.
+Remote source metadata is retained when applicable, while `cover_path` points
+to the locally stored image used by the application.
 
 Business operations are defined as Ash actions and exposed through domain code
 interfaces. These operations include:
 
 - Creating, editing, and deleting reading logs
 - Creating, editing, and deleting books
+- Attaching and removing locally stored book covers
 - Starting, finishing, abandoning, and reopening books
 
 The web layer calls these interfaces instead of directly updating records.
@@ -64,7 +67,8 @@ database includes:
 
 By default, the database is stored in the operating system's application-data
 directory. `CiBookTracker.AppData` resolves the appropriate path for Linux,
-macOS, or Windows. `DATABASE_PATH` can override that location.
+macOS, or Windows. Local cover images are stored in a sibling `covers/`
+directory. `DATABASE_PATH` can override the database location.
 
 The application does not require user accounts, a remote database, or cloud
 synchronization.
@@ -173,11 +177,14 @@ Several focused modules handle workflows outside the two main resources:
   rows.
 - `CiBookTracker.Library.WordEstimator` counts a representative text sample
   and extrapolates an estimated total.
+- `CiBookTracker.Library.BookCover` validates and stores uploaded or downloaded
+  images, serves path information, and backfills older remote-only covers.
 - `CiBookTracker.Settings.MetadataProviders` manages provider availability and
   credentials.
-- `CiBookTracker.DatabaseBackup` creates downloadable database exports.
-- `CiBookTracker.DatabaseRestore` validates an uploaded database, creates a
-  safety backup, and replaces the active database.
+- `CiBookTracker.DatabaseBackup` creates portable ZIP archives containing the
+  SQLite database and local covers.
+- `CiBookTracker.DatabaseRestore` validates ZIP or legacy SQLite backups,
+  creates a complete safety archive, and replaces the active data.
 - `CiBookTrackerWeb.ReadingLogFormat` formats language names and reading goals.
 - `CiBookTrackerWeb.BookFormat` consistently formats book statuses, numbers,
   word totals, dates, and status messages.
@@ -190,8 +197,13 @@ Several focused modules handle workflows outside the two main resources:
 2. The user enters values manually or searches for metadata.
 3. A selected metadata result prefills the shared form.
 4. The optional word estimator can calculate an estimated total from a sample.
-5. Saving calls the appropriate Ash domain interface.
-6. Ash validates and persists the book.
+5. An uploaded image or cover URL is stored in the application-data directory.
+6. Saving calls the appropriate Ash domain and cover interfaces.
+7. Ash validates and persists the book and cover attachment.
+
+Cover attachment is a dedicated Ash action. Successful replacement removes the
+superseded file, failed persistence removes the newly written file, and book or
+reading-log deletion removes associated local files.
 
 ### Updating Book Status
 
@@ -209,15 +221,17 @@ Several focused modules handle workflows outside the two main resources:
 
 ### Exporting and Restoring Data
 
-1. Export produces a consistent downloadable copy of the SQLite database.
-2. Restore stages and validates an uploaded SQLite file.
-3. The current database is backed up before replacement.
-4. The repository connection is safely restarted around the file swap.
+1. Export creates a ZIP containing `reading_log.db` and `covers/`.
+2. Restore stages and validates either that ZIP layout or a legacy SQLite file.
+3. Migration compatibility is derived from the repository migration files.
+4. The current database and covers are archived before replacement.
+5. Database replacement is rolled back if cover replacement fails.
+6. The repository connection is safely restarted around the file swap.
 
-## Final Refactor Pass
+## Earlier Refactor Pass
 
-The packaging refactor focused on duplication rather than architecture changes.
-It introduced two small shared modules:
+An earlier packaging refactor focused on duplication rather than architecture
+changes. It introduced two small shared modules:
 
 - `CiBookTrackerWeb.BookFormat`
 - `CiBookTracker.Library.BookMetadata.Normalization`
@@ -231,10 +245,9 @@ page because their grid classes and responsive layouts intentionally differ.
 Keeping those definitions separate is clearer than forcing a shared abstraction
 that would still require page-specific presentation options.
 
-The refactor did not change the database schema, domain actions, routes, or
-visible application behavior. Direct tests cover the extracted formatting and
-normalization contracts, and the complete project suite verifies the affected
-flows.
+That pass did not change the database schema, domain actions, routes, or visible
+application behavior. Later cover-storage and portable-backup work did extend
+the schema and domain actions described above.
 
 ## Design Principles
 
@@ -245,4 +258,3 @@ flows.
 - Share presentation helpers only when their behavior is genuinely identical.
 - Prefer small modules and explicit workflows over broad abstractions.
 - Preserve manual entry as a first-class workflow.
-

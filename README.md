@@ -4,8 +4,9 @@ CI Book Tracker is a local-first reading tracker for language learners. It
 organizes books into language-specific reading logs, tracks reading goals and
 estimated words read, and keeps the data in a local SQLite database.
 
-Manual entry works fully offline. Internet access is only needed for optional
-book metadata and cover lookups.
+Manual entry and local cover uploads work fully offline. Internet access is
+only needed for optional metadata lookups and downloading cover images from
+URLs.
 
 ## Why This Project Exists
 
@@ -49,11 +50,11 @@ Further background:
   - Abandoned
 - Search and filtering within a reading log
 - Optional metadata lookup and metadata refresh
-- Optional cover lookup
+- Optional cover lookup, URL download, and local image upload
 - Bulk book import from CSV
 - Standalone and book-form sample-based word count estimator
 - Local SQLite storage
-- Database export and restore
+- Portable ZIP backup and restore, including locally stored covers
 - Settings page with metadata provider configuration
 
 ## Metadata Providers
@@ -170,16 +171,39 @@ in a local `reading_log.db` SQLite database:
 | macOS | `~/Library/Application Support/reading_log/` |
 | Windows | `%APPDATA%/reading_log/` |
 
+Locally stored book covers are kept in the `covers/` directory beside the
+default database. Covers selected from metadata providers or entered as image
+URLs are downloaded there when the book is saved. JPG, PNG, WebP, and GIF
+files can also be uploaded directly.
+
 Set `DATABASE_PATH` to use a different location:
 
 ```sh
 DATABASE_PATH=/absolute/path/to/reading_log.db mix phx.server
 ```
 
-The Settings page supports downloading a database export and restoring a
-previously exported database. Keep regular backups somewhere separate from the
-device running the application, especially before moving or replacing the
-database file.
+The Settings page exports a ZIP backup containing `reading_log.db` and the
+local `covers/` directory. Restore accepts these ZIP backups and legacy
+standalone `.db`, `.sqlite`, and `.sqlite3` exports. A full restore replaces
+the database and, for ZIP backups, the local covers. It also creates a
+timestamped safety ZIP first.
+
+After pulling a version that adds a database migration, apply it before
+starting the server:
+
+```sh
+mix ecto.migrate
+```
+
+Existing books that have a remote cover URL but no downloaded local image can
+be backfilled once:
+
+```sh
+mix book_covers.backfill
+```
+
+Keep regular backup ZIPs somewhere separate from the device running the
+application.
 
 ## Provider Configuration
 

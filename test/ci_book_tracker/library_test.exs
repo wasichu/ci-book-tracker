@@ -115,11 +115,16 @@ defmodule CiBookTracker.LibraryTest do
           author: "Antoine de Saint-Exupery",
           page_count: 96,
           estimated_words: 16_000,
-          cover_url: "https://covers.openlibrary.org/b/id/123-M.jpg",
-          cover_provider: "open_library",
-          cover_id: 123,
           difficulty_label: "Intermediate",
           notes: "Read one chapter each day."
+        })
+
+      edited =
+        Library.attach_book_cover!(edited, %{
+          cover_path: "cover.jpg",
+          cover_url: "https://covers.openlibrary.org/b/id/123-M.jpg",
+          cover_provider: "open_library",
+          cover_id: 123
         })
 
       assert edited.author == "Antoine de Saint-Exupery"

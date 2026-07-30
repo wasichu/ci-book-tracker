@@ -4,11 +4,13 @@ defmodule CiBookTrackerWeb.DatabaseExportControllerTest do
   alias CiBookTracker.DatabaseBackup
   alias CiBookTrackerWeb.DatabaseExportController
 
-  test "downloads the configured SQLite database", %{conn: conn} do
+  test "downloads a portable ZIP backup", %{conn: conn} do
     conn = get(conn, ~p"/backup/database")
 
-    assert response(conn, 200) =~ "SQLite format 3"
-    assert get_resp_header(conn, "content-type") == ["application/vnd.sqlite3"]
+    body = response(conn, 200)
+    assert get_resp_header(conn, "content-type") == ["application/zip"]
+    assert {:ok, files} = :zip.extract(body, [:memory])
+    assert List.keymember?(files, ~c"reading_log.db", 0)
 
     [content_disposition] = get_resp_header(conn, "content-disposition")
     assert content_disposition =~ "attachment"
@@ -20,7 +22,7 @@ defmodule CiBookTrackerWeb.DatabaseExportControllerTest do
       conn
       |> init_test_session(%{})
       |> fetch_flash()
-      |> DatabaseExportController.send_database({:error, :not_found})
+      |> DatabaseExportController.send_backup({:error, :not_found})
 
     assert redirected_to(conn) == "/backup"
 
