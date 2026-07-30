@@ -1,25 +1,8 @@
 defmodule CiBookTracker.DatabaseRestore do
   @moduledoc false
 
-  alias CiBookTracker.{AppData, DatabaseBackup, Repo}
-  alias Exqlite.Sqlite3
-
-  @database_entry "reading_log.db"
-  @max_cover_bytes 8 * 1024 * 1024
-  @max_archive_bytes 250 * 1024 * 1024
-  @expected_tables ~w(books provider_settings reading_logs schema_migrations)
-
-  defmodule StagedBackup do
-    @moduledoc false
-    @enforce_keys [:database_path, :cover_directory, :temporary_directory]
-    defstruct [:database_path, :cover_directory, :temporary_directory]
-
-    @type t :: %__MODULE__{
-            database_path: String.t(),
-            cover_directory: String.t(),
-            temporary_directory: String.t()
-          }
-  end
+  alias CiBookTracker.{AppData, BackupArchive, DatabaseBackup, DatabaseValidation}
+  alias CiBookTracker.BackupArchive.StagedBackup
 
   @type validation_error ::
           :not_readable
@@ -32,32 +15,14 @@ defmodule CiBookTracker.DatabaseRestore do
           | :incompatible_migrations
 
   @spec validate(String.t()) :: :ok | {:error, validation_error()}
-  def validate(path) do
-    with true <- File.regular?(path) || {:error, :not_readable},
-         {:ok, connection} <- Sqlite3.open(path, mode: :readonly) do
-      try do
-        with :ok <- validate_integrity(connection),
-             :ok <- validate_tables(connection),
-             :ok <- validate_migrations(connection) do
-          :ok
-        end
-      after
-        Sqlite3.close(connection)
-      end
-    else
-      {:error, :not_readable} = error -> error
-      {:error, _reason} -> {:error, :not_sqlite}
-    end
-  rescue
-    _error -> {:error, :not_sqlite}
-  end
+  defdelegate validate(path), to: DatabaseValidation
 
   @spec stage(String.t()) ::
           {:ok, String.t() | StagedBackup.t()} | {:error, validation_error() | term()}
   def stage(source_path) do
     case validate(source_path) do
       :ok -> stage_database(source_path)
-      {:error, _database_error} -> stage_archive(source_path)
+      {:error, _database_error} -> BackupArchive.stage(source_path, &validate/1)
     end
   end
 
@@ -120,73 +85,8 @@ defmodule CiBookTracker.DatabaseRestore do
 
   def error_message(_reason), do: "The database could not be restored."
 
-  defp validate_integrity(connection) do
-    case query(connection, "PRAGMA integrity_check") do
-      {:ok, [["ok"]]} -> :ok
-      {:ok, _rows} -> {:error, :integrity_check_failed}
-      {:error, _reason} -> {:error, :not_sqlite}
-    end
-  end
-
-  defp validate_tables(connection) do
-    with {:ok, rows} <-
-           query(connection, "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name") do
-      tables = Enum.map(rows, &List.first/1)
-      missing = @expected_tables -- tables
-      if missing == [], do: :ok, else: {:error, {:missing_tables, missing}}
-    else
-      {:error, _reason} -> {:error, :not_sqlite}
-    end
-  end
-
-  defp validate_migrations(connection) do
-    case query(connection, "SELECT version FROM schema_migrations ORDER BY version") do
-      {:ok, rows} ->
-        versions = Enum.map(rows, fn [version] -> normalize_version(version) end)
-
-        if versions == expected_migration_versions(),
-          do: :ok,
-          else: {:error, :incompatible_migrations}
-
-      {:error, _reason} ->
-        {:error, :incompatible_migrations}
-    end
-  end
-
   @doc false
-  def expected_migration_versions do
-    Repo
-    |> Ecto.Migrator.migrations_path()
-    |> Path.join("*.exs")
-    |> Path.wildcard()
-    |> Enum.map(&Path.basename/1)
-    |> Enum.map(fn filename ->
-      filename
-      |> String.split("_", parts: 2)
-      |> hd()
-      |> String.to_integer()
-    end)
-    |> Enum.sort()
-  end
-
-  defp normalize_version(version) when is_integer(version), do: version
-
-  defp normalize_version(version) when is_binary(version) do
-    case Integer.parse(version) do
-      {integer, ""} -> integer
-      _other -> version
-    end
-  end
-
-  defp query(connection, sql) do
-    with {:ok, statement} <- Sqlite3.prepare(connection, sql) do
-      try do
-        Sqlite3.fetch_all(connection, statement)
-      after
-        Sqlite3.release(connection, statement)
-      end
-    end
-  end
+  defdelegate expected_migration_versions(), to: DatabaseValidation
 
   defp stage_database(source_path) do
     staged_path =
@@ -205,115 +105,8 @@ defmodule CiBookTracker.DatabaseRestore do
     end
   end
 
-  defp stage_archive(source_path) do
-    with {:ok, table} <- zip_table(source_path),
-         :ok <- validate_archive_table(table),
-         {:ok, files} <- extract_archive(source_path) do
-      write_staged_archive(files)
-    end
-  end
-
-  defp zip_table(source_path) do
-    case :zip.table(String.to_charlist(source_path)) do
-      {:ok, table} -> {:ok, table}
-      {:error, _reason} -> {:error, :not_sqlite}
-    end
-  end
-
-  defp validate_archive_table(table) do
-    files =
-      Enum.flat_map(table, fn
-        {:zip_file, name, file_info, _comment, _offset, _compressed_size} ->
-          [{to_string(name), elem(file_info, 1)}]
-
-        _comment ->
-          []
-      end)
-
-    names = Enum.map(files, &elem(&1, 0))
-    total_size = Enum.sum(Enum.map(files, &elem(&1, 1)))
-
-    cond do
-      Enum.count(names, &(&1 == @database_entry)) != 1 ->
-        {:error, :not_backup}
-
-      length(names) != length(Enum.uniq(names)) ->
-        {:error, :unsafe_archive}
-
-      total_size > @max_archive_bytes ->
-        {:error, :backup_too_large}
-
-      Enum.any?(files, fn {name, size} ->
-        !valid_archive_entry?(name, size)
-      end) ->
-        {:error, :unsafe_archive}
-
-      true ->
-        :ok
-    end
-  end
-
-  defp valid_archive_entry?(@database_entry, size), do: size > 0
-
-  defp valid_archive_entry?("covers/" <> filename, size) do
-    filename != "" && filename == Path.basename(filename) && size in 1..@max_cover_bytes
-  end
-
-  defp valid_archive_entry?(_name, _size), do: false
-
-  defp extract_archive(source_path) do
-    case :zip.extract(String.to_charlist(source_path), [:memory]) do
-      {:ok, files} ->
-        {:ok, Enum.map(files, fn {name, contents} -> {to_string(name), contents} end)}
-
-      {:error, _reason} ->
-        {:error, :not_backup}
-    end
-  end
-
-  defp write_staged_archive(files) do
-    temporary_directory =
-      Path.join(
-        System.tmp_dir!(),
-        "ci_book_tracker_restore_#{System.unique_integer([:positive, :monotonic])}"
-      )
-
-    database_path = Path.join(temporary_directory, @database_entry)
-    cover_directory = Path.join(temporary_directory, "covers")
-
-    with :ok <- File.mkdir_p(cover_directory),
-         :ok <- write_archive_files(files, temporary_directory),
-         :ok <- validate(database_path) do
-      {:ok,
-       %StagedBackup{
-         database_path: database_path,
-         cover_directory: cover_directory,
-         temporary_directory: temporary_directory
-       }}
-    else
-      {:error, reason} ->
-        File.rm_rf(temporary_directory)
-        {:error, reason}
-    end
-  end
-
-  defp write_archive_files(files, temporary_directory) do
-    Enum.reduce_while(files, :ok, fn {name, contents}, :ok ->
-      path = Path.join(temporary_directory, name)
-      File.mkdir_p!(Path.dirname(path))
-
-      case File.write(path, contents) do
-        :ok -> {:cont, :ok}
-        {:error, reason} -> {:halt, {:error, reason}}
-      end
-    end)
-  end
-
   @spec cleanup_stage(String.t() | StagedBackup.t() | nil) :: :ok
-  def cleanup_stage(%StagedBackup{temporary_directory: directory}) do
-    File.rm_rf(directory)
-    :ok
-  end
+  def cleanup_stage(%StagedBackup{} = staged), do: BackupArchive.cleanup(staged)
 
   def cleanup_stage(path) when is_binary(path) do
     File.rm(path)

@@ -47,6 +47,23 @@ defmodule CiBookTracker.Library.Book do
       accept @editable_attributes
     end
 
+    update :edit_with_cover do
+      accept @editable_attributes ++ @cover_attributes
+      require_atomic? false
+      validate CiBookTracker.Library.Book.Validations.CoverAttachment
+      change CiBookTracker.Library.Book.Changes.ManageCoverFile
+    end
+
+    update :edit_without_cover do
+      accept @editable_attributes
+      require_atomic? false
+      change set_attribute(:cover_url, nil)
+      change set_attribute(:cover_path, nil)
+      change set_attribute(:cover_provider, nil)
+      change set_attribute(:cover_id, nil)
+      change CiBookTracker.Library.Book.Changes.ManageCoverFile
+    end
+
     update :attach_cover do
       accept @cover_attributes
       require_atomic? false

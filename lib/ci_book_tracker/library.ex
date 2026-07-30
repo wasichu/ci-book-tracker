@@ -16,6 +16,8 @@ defmodule CiBookTracker.Library do
       define :get_book, action: :read, get_by: [:id]
       define :list_books, action: :read
       define :edit_book, action: :edit
+      define :edit_book_with_cover, action: :edit_with_cover
+      define :edit_book_without_cover, action: :edit_without_cover
       define :attach_book_cover, action: :attach_cover
       define :remove_book_cover, action: :remove_cover
       define :start_book, action: :start

@@ -87,8 +87,10 @@ include:
 - Settings
 - Database export and restore
 
-The active reading log is stored in the browser session. Routes that operate on
-books verify that the requested book belongs to that active log.
+The active reading log is stored in the browser session.
+`CiBookTrackerWeb.ReadingLogSession` owns session-key precedence and resolves
+the selected log for LiveViews. Routes that operate on books also verify that
+the requested book belongs to that active log.
 
 LiveViews own temporary interface state such as:
 
@@ -181,10 +183,18 @@ Several focused modules handle workflows outside the two main resources:
   images, serves path information, and backfills older remote-only covers.
 - `CiBookTracker.Settings.MetadataProviders` manages provider availability and
   credentials.
-- `CiBookTracker.DatabaseBackup` creates portable ZIP archives containing the
-  SQLite database and local covers.
-- `CiBookTracker.DatabaseRestore` validates ZIP or legacy SQLite backups,
-  creates a complete safety archive, and replaces the active data.
+- `CiBookTracker.BackupArchive` owns the portable ZIP layout, archive limits,
+  packing, safe-path validation, and extraction.
+- `CiBookTracker.DatabaseBackup` snapshots SQLite and delegates portable
+  archive creation to `BackupArchive`.
+- `CiBookTracker.DatabaseValidation` checks SQLite integrity, required tables,
+  and migration compatibility.
+- `CiBookTracker.DatabaseRestore` stages ZIP or legacy SQLite backups, creates
+  a complete safety archive, and safely replaces the active data.
+- `CiBookTrackerWeb.BookLive.FormParams` owns deterministic book-form
+  normalization and metadata transformations.
+- `CiBookTrackerWeb.BookLive.FormComponents` contains the stateless metadata,
+  cover, and book-field presentation used by the add/edit LiveView.
 - `CiBookTrackerWeb.ReadingLogFormat` formats language names and reading goals.
 - `CiBookTrackerWeb.BookFormat` consistently formats book statuses, numbers,
   word totals, dates, and status messages.
@@ -198,12 +208,15 @@ Several focused modules handle workflows outside the two main resources:
 3. A selected metadata result prefills the shared form.
 4. The optional word estimator can calculate an estimated total from a sample.
 5. An uploaded image or cover URL is stored in the application-data directory.
-6. Saving calls the appropriate Ash domain and cover interfaces.
-7. Ash validates and persists the book and cover attachment.
+6. Saving selects one explicit Ash action for an unchanged, replaced, or
+   removed cover.
+7. Ash validates and persists ordinary edits and the cover change as one
+   database operation.
 
-Cover attachment is a dedicated Ash action. Successful replacement removes the
-superseded file, failed persistence removes the newly written file, and book or
-reading-log deletion removes associated local files.
+Cover attachment and cover-aware edits are dedicated Ash actions. Successful
+replacement removes the superseded file, failed persistence removes the newly
+written file without committing other edits, and book or reading-log deletion
+removes associated local files.
 
 ### Updating Book Status
 
@@ -221,9 +234,12 @@ reading-log deletion removes associated local files.
 
 ### Exporting and Restoring Data
 
-1. Export creates a ZIP containing `reading_log.db` and `covers/`.
-2. Restore stages and validates either that ZIP layout or a legacy SQLite file.
-3. Migration compatibility is derived from the repository migration files.
+1. `DatabaseBackup` snapshots SQLite and asks `BackupArchive` to create a ZIP
+   containing `reading_log.db` and `covers/`.
+2. `BackupArchive` safely stages the fixed ZIP layout; legacy SQLite files are
+   staged directly.
+3. `DatabaseValidation` checks integrity and derives migration compatibility
+   from the repository migration files.
 4. The current database and covers are archived before replacement.
 5. Database replacement is rolled back if cover replacement fails.
 6. The repository connection is safely restarted around the file swap.

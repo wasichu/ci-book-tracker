@@ -95,6 +95,19 @@ defmodule CiBookTracker.Library.BookCover do
     end
   end
 
+  @spec edit(CiBookTracker.Library.Book.t(), map()) ::
+          {:ok, CiBookTracker.Library.Book.t()} | {:error, term()}
+  def edit(book, attributes) do
+    case Library.edit_book_with_cover(book, attributes) do
+      {:ok, updated_book} ->
+        {:ok, updated_book}
+
+      {:error, error} ->
+        if attributes[:cover_path] != book.cover_path, do: remove(attributes[:cover_path])
+        {:error, error}
+    end
+  end
+
   @spec backfill_remote_covers() :: %{
           downloaded: non_neg_integer(),
           skipped: non_neg_integer(),

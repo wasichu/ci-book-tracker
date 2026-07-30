@@ -1,7 +1,7 @@
 defmodule CiBookTracker.DatabaseRestoreTest do
   use ExUnit.Case, async: true
 
-  alias CiBookTracker.{DatabaseBackup, DatabaseRestore}
+  alias CiBookTracker.{DatabaseBackup, DatabaseRestore, DatabaseValidation}
   alias Exqlite.Sqlite3
 
   test "validates compatible CI Book Tracker databases" do
@@ -9,7 +9,7 @@ defmodule CiBookTracker.DatabaseRestoreTest do
     create_database(path)
     on_exit(fn -> File.rm(path) end)
 
-    assert :ok = DatabaseRestore.validate(path)
+    assert :ok = DatabaseValidation.validate(path)
   end
 
   test "rejects invalid and structurally incompatible files" do
@@ -24,8 +24,8 @@ defmodule CiBookTracker.DatabaseRestoreTest do
       File.rm(missing_path)
     end)
 
-    assert {:error, :not_sqlite} = DatabaseRestore.validate(text_path)
-    assert {:error, {:missing_tables, tables}} = DatabaseRestore.validate(missing_path)
+    assert {:error, :not_sqlite} = DatabaseValidation.validate(text_path)
+    assert {:error, {:missing_tables, tables}} = DatabaseValidation.validate(missing_path)
     assert "books" in tables
   end
 
@@ -123,7 +123,7 @@ defmodule CiBookTracker.DatabaseRestoreTest do
             "CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY)"
           )
 
-        Enum.each(DatabaseRestore.expected_migration_versions(), fn version ->
+        Enum.each(DatabaseValidation.expected_migration_versions(), fn version ->
           :ok =
             Sqlite3.execute(
               connection,

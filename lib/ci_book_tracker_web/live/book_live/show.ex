@@ -2,11 +2,11 @@ defmodule CiBookTrackerWeb.BookLive.Show do
   use CiBookTrackerWeb, :live_view
 
   alias CiBookTracker.Library
-  alias CiBookTrackerWeb.BookFormat
+  alias CiBookTrackerWeb.{BookFormat, ReadingLogSession}
 
   @impl true
   def mount(%{"id" => id}, session, socket) do
-    with {:ok, reading_log} <- active_reading_log(session),
+    with {:ok, reading_log} <- ReadingLogSession.resolve(session),
          {:ok, %{reading_log_id: reading_log_id} = book} <- Library.get_book(id),
          true <- reading_log_id == reading_log.id do
       {:ok,
@@ -278,17 +278,8 @@ defmodule CiBookTrackerWeb.BookLive.Show do
     """
   end
 
-  defp active_reading_log(session) do
-    id = session["active_reading_log_id"] || session["auto_open_reading_log_id"]
-
-    case id && Library.get_reading_log(id) do
-      {:ok, reading_log} -> {:ok, reading_log}
-      _missing -> {:error, :not_found}
-    end
-  end
-
   defp fallback_path(session) do
-    if session["active_reading_log_id"] || session["auto_open_reading_log_id"],
+    if ReadingLogSession.selected?(session),
       do: ~p"/dashboard",
       else: ~p"/"
   end

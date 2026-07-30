@@ -3,10 +3,8 @@ defmodule CiBookTracker.DatabaseBackup do
   Builds portable backups containing the SQLite database and local cover images.
   """
 
-  alias CiBookTracker.{AppData, Repo}
+  alias CiBookTracker.{AppData, BackupArchive, Repo}
   alias Exqlite.Sqlite3
-
-  @database_entry "reading_log.db"
 
   @spec database_path() :: String.t()
   def database_path do
@@ -35,8 +33,8 @@ defmodule CiBookTracker.DatabaseBackup do
     with {:ok, _database_path} <- available_database(database_path),
          {:ok, snapshot_path} <- snapshot_database(database_path) do
       try do
-        with {:ok, entries} <- archive_entries(snapshot_path, cover_directory),
-             {:ok, _archive} <- :zip.create(String.to_charlist(output_path), entries) do
+        with {:ok, ^output_path} <-
+               BackupArchive.create(output_path, snapshot_path, cover_directory) do
           File.chmod(output_path, 0o600)
           {:ok, output_path}
         end
@@ -92,47 +90,6 @@ defmodule CiBookTracker.DatabaseBackup do
     end
   rescue
     _error -> {:error, :snapshot_failed}
-  end
-
-  defp archive_entries(database_path, cover_directory) do
-    with {:ok, database} <- File.read(database_path),
-         {:ok, covers} <- cover_entries(cover_directory) do
-      {:ok, [{String.to_charlist(@database_entry), database} | covers]}
-    end
-  end
-
-  defp cover_entries(cover_directory) do
-    case File.ls(cover_directory) do
-      {:ok, filenames} ->
-        filenames
-        |> Enum.sort()
-        |> Enum.reduce_while({:ok, []}, fn filename, {:ok, entries} ->
-          path = Path.join(cover_directory, filename)
-
-          if File.regular?(path) do
-            case File.read(path) do
-              {:ok, contents} ->
-                entry_name = String.to_charlist("covers/#{Path.basename(filename)}")
-                {:cont, {:ok, [{entry_name, contents} | entries]}}
-
-              {:error, reason} ->
-                {:halt, {:error, reason}}
-            end
-          else
-            {:cont, {:ok, entries}}
-          end
-        end)
-        |> case do
-          {:ok, entries} -> {:ok, Enum.reverse(entries)}
-          error -> error
-        end
-
-      {:error, :enoent} ->
-        {:ok, []}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
   end
 
   defp temporary_archive_path do

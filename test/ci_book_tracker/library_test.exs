@@ -136,6 +136,73 @@ defmodule CiBookTracker.LibraryTest do
       assert edited.difficulty_label == "Intermediate"
       assert edited.notes == "Read one chapter each day."
     end
+
+    test "edits book fields and replaces its cover in one action" do
+      book =
+        create_reading_log()
+        |> then(&Library.add_book!(&1.id, "Original"))
+        |> then(
+          &Library.attach_book_cover!(&1, %{
+            cover_path: "old.jpg",
+            cover_url: nil,
+            cover_provider: "local",
+            cover_id: nil
+          })
+        )
+
+      edited =
+        Library.edit_book_with_cover!(book, %{
+          title: "Edited",
+          author: "Author",
+          cover_path: "new.jpg",
+          cover_url: "https://example.com/new.jpg",
+          cover_provider: "test",
+          cover_id: 10
+        })
+
+      assert edited.title == "Edited"
+      assert edited.author == "Author"
+      assert edited.cover_path == "new.jpg"
+      assert edited.cover_url == "https://example.com/new.jpg"
+    end
+
+    test "does not persist ordinary edits when replacement cover validation fails" do
+      book =
+        create_reading_log()
+        |> then(&Library.add_book!(&1.id, "Original"))
+
+      assert {:error, _error} =
+               Library.edit_book_with_cover(book, %{
+                 title: "Should not persist",
+                 cover_path: "invalid.jpg",
+                 cover_provider: "remote",
+                 cover_url: nil
+               })
+
+      assert Library.get_book!(book.id).title == "Original"
+    end
+
+    test "edits book fields and removes its cover in one action" do
+      book =
+        create_reading_log()
+        |> then(&Library.add_book!(&1.id, "Original"))
+        |> then(
+          &Library.attach_book_cover!(&1, %{
+            cover_path: "cover.jpg",
+            cover_url: nil,
+            cover_provider: "local",
+            cover_id: nil
+          })
+        )
+
+      edited = Library.edit_book_without_cover!(book, %{title: "Edited"})
+
+      assert edited.title == "Edited"
+      assert is_nil(edited.cover_path)
+      assert is_nil(edited.cover_url)
+      assert is_nil(edited.cover_provider)
+      assert is_nil(edited.cover_id)
+    end
   end
 
   describe "book lifecycle" do

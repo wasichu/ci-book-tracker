@@ -2,7 +2,7 @@ defmodule CiBookTrackerWeb.DashboardLive do
   use CiBookTrackerWeb, :live_view
 
   alias CiBookTracker.Library
-  alias CiBookTrackerWeb.{BookFormat, ReadingLogFormat}
+  alias CiBookTrackerWeb.{BookFormat, ReadingLogFormat, ReadingLogSession}
 
   @status_groups [
     {:in_progress, "In progress", "hero-book-open", "bg-sky-100 text-sky-800"},
@@ -21,7 +21,7 @@ defmodule CiBookTrackerWeb.DashboardLive do
 
   @impl true
   def mount(_params, session, socket) do
-    reading_log = active_reading_log(session)
+    reading_log = ReadingLogSession.resolve_or_nil(session)
 
     if reading_log do
       {:ok,
@@ -523,26 +523,6 @@ defmodule CiBookTrackerWeb.DashboardLive do
       summary: summarize(books, reading_log.word_goal)
     )
     |> apply_book_filters()
-  end
-
-  defp active_reading_log(session) do
-    session
-    |> active_reading_log_id()
-    |> case do
-      nil -> nil
-      id -> get_reading_log(id)
-    end
-  end
-
-  defp active_reading_log_id(session) do
-    session["active_reading_log_id"] || session["auto_open_reading_log_id"]
-  end
-
-  defp get_reading_log(id) do
-    case Library.get_reading_log(id) do
-      {:ok, reading_log} -> reading_log
-      {:error, _error} -> nil
-    end
   end
 
   defp summarize(books, word_goal) do

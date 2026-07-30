@@ -1,13 +1,12 @@
 defmodule CiBookTrackerWeb.BookLive.Import do
   use CiBookTrackerWeb, :live_view
 
-  alias CiBookTracker.Library
   alias CiBookTracker.Library.BookCsvImport
-  alias CiBookTrackerWeb.BookFormat
+  alias CiBookTrackerWeb.{BookFormat, ReadingLogSession}
 
   @impl true
   def mount(_params, session, socket) do
-    case active_reading_log(session) do
+    case ReadingLogSession.resolve_or_nil(session) do
       nil ->
         {:ok,
          socket
@@ -340,15 +339,6 @@ defmodule CiBookTrackerWeb.BookLive.Import do
       </section>
     </Layouts.app>
     """
-  end
-
-  defp active_reading_log(session) do
-    id = session["active_reading_log_id"] || session["auto_open_reading_log_id"]
-
-    case id && Library.get_reading_log(id) do
-      {:ok, reading_log} -> reading_log
-      _missing -> nil
-    end
   end
 
   defp import_message(%{imported: imported, failed: []}),

@@ -6,25 +6,8 @@ defmodule CiBookTrackerWeb.BookLive.Form do
   alias CiBookTracker.Library.BookMetadata
   alias CiBookTracker.Library.WordEstimator
   alias CiBookTracker.Settings.MetadataProviders
-  alias CiBookTrackerWeb.{BookFormat, WordEstimatorComponents}
-
-  @empty_params %{
-    "title" => "",
-    "author" => "",
-    "page_count" => "",
-    "estimated_words" => "",
-    "estimated_words_mode" => "manual",
-    "cover_url" => "",
-    "cover_path" => "",
-    "cover_image_url" => "",
-    "cover_provider" => "",
-    "cover_id" => "",
-    "difficulty_label" => "",
-    "status" => "want_to_read",
-    "started_on" => "",
-    "finished_on" => "",
-    "notes" => ""
-  }
+  alias CiBookTrackerWeb.BookLive.{FormComponents, FormParams}
+  alias CiBookTrackerWeb.ReadingLogSession
 
   @status_options [
     {"Want to read", "want_to_read"},
@@ -42,7 +25,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
 
   @impl true
   def mount(params, session, socket) do
-    reading_log = active_reading_log(session)
+    reading_log = ReadingLogSession.resolve_or_nil(session)
 
     with %{} <- reading_log,
          {:ok, book} <- load_book(socket.assigns.live_action, params, reading_log) do
@@ -59,13 +42,13 @@ defmodule CiBookTrackerWeb.BookLive.Form do
        |> assign(:metadata_provider_options, metadata_provider_options())
        |> assign(:metadata_provider, "open_library")
        |> assign(:metadata_refresh?, metadata_refresh?)
-       |> assign(:metadata_query, initial_metadata_query(book, metadata_refresh?))
+       |> assign(:metadata_query, FormParams.initial_metadata_query(book, metadata_refresh?))
        |> assign(:metadata_results, [])
        |> assign(:metadata_status, :idle)
        |> assign(:metadata_message, nil)
        |> assign(:pending_metadata, nil)
        |> assign(:selected_cover_result_id, nil)
-       |> assign(:form, to_form(form_params(book), as: :book))
+       |> assign(:form, to_form(FormParams.initial(book), as: :book))
        |> allow_upload(:cover_art,
          accept: ~w(.jpg .jpeg .png .webp .gif),
          max_entries: 1,
@@ -82,7 +65,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
 
   @impl true
   def handle_event("validate", %{"book" => params, "estimator" => estimator_params}, socket) do
-    params = sync_estimated_words(params, socket.assigns.book)
+    params = FormParams.sync_estimated_words(params, socket.assigns.book)
 
     {:noreply,
      socket
@@ -91,7 +74,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
   end
 
   def handle_event("validate", %{"book" => params}, socket) do
-    params = sync_estimated_words(params, socket.assigns.book)
+    params = FormParams.sync_estimated_words(params, socket.assigns.book)
     {:noreply, assign(socket, :form, to_form(params, as: :book))}
   end
 
@@ -113,10 +96,10 @@ defmodule CiBookTrackerWeb.BookLive.Form do
   def handle_event("save", %{"book" => params}, socket) do
     params =
       params
-      |> sync_estimated_words(socket.assigns.book)
-      |> normalize_params()
+      |> FormParams.sync_estimated_words(socket.assigns.book)
+      |> FormParams.normalize()
 
-    if blank?(params["title"]) do
+    if FormParams.blank?(params["title"]) do
       form =
         to_form(params,
           as: :book,
@@ -193,12 +176,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
 
       result ->
         params =
-          socket.assigns.form.params
-          |> Map.put("title", result.title)
-          |> put_if_present("author", result.author)
-          |> put_if_present("page_count", result.page_count)
-          |> put_metadata_estimate(result.page_count)
-          |> put_cover_metadata(result)
+          FormParams.apply_metadata(socket.assigns.form.params, result, :new)
 
         {:noreply,
          socket
@@ -215,7 +193,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
         {:noreply, socket}
 
       result ->
-        params = put_cover_metadata(socket.assigns.form.params, result)
+        params = FormParams.apply_cover(socket.assigns.form.params, result)
 
         {:noreply,
          socket
@@ -235,10 +213,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
 
       result ->
         params =
-          socket.assigns.form.params
-          |> put_if_present("page_count", result.page_count)
-          |> put_metadata_estimate(result.page_count)
-          |> put_cover_metadata(result)
+          FormParams.apply_metadata(socket.assigns.form.params, result, :edit)
 
         {:noreply,
          socket
@@ -286,201 +261,20 @@ defmodule CiBookTrackerWeb.BookLive.Form do
           </p>
         </header>
 
-        <section
+        <FormComponents.metadata_search
           :if={is_nil(@book) || @metadata_refresh?}
-          id="metadata-search"
-          class="rounded-[2rem] border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-5 shadow-sm shadow-amber-100/70 sm:p-7"
-        >
-          <div class="flex items-start gap-3">
-            <span class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800">
-              <.icon name="hero-magnifying-glass" class="size-5" />
-            </span>
-            <div>
-              <h2 class="text-lg font-semibold text-slate-950">
-                {metadata_heading(@book)}
-              </h2>
-              <p class="mt-1 text-sm leading-6 text-slate-600">
-                {metadata_intro(@book)}
-              </p>
-            </div>
-          </div>
-
-          <.form
-            for={
-              to_form(
-                %{"query" => @metadata_query, "provider" => @metadata_provider},
-                as: :metadata
-              )
-            }
-            id="metadata-search-form"
-            phx-submit="search_metadata"
-            class="mt-5"
-          >
-            <.input
-              field={
-                to_form(
-                  %{"query" => @metadata_query, "provider" => @metadata_provider},
-                  as: :metadata
-                )[:provider]
-              }
-              type="select"
-              label="Metadata source"
-              options={@metadata_provider_options}
-            />
-            <.input
-              field={
-                to_form(
-                  %{"query" => @metadata_query, "provider" => @metadata_provider},
-                  as: :metadata
-                )[:query]
-              }
-              label="Title, author, ISBN, or keywords"
-              placeholder="Cien anos de soledad or 9780307474728"
-              autocomplete="off"
-            />
-            <.button
-              id="search-metadata-button"
-              type="submit"
-              phx-disable-with="Searching..."
-              class="mt-1 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 font-semibold text-white transition hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 sm:w-auto"
-            >
-              <.icon name="hero-magnifying-glass" class="size-5" /> Search
-            </.button>
-          </.form>
-
-          <p
-            :if={@metadata_message}
-            id="metadata-message"
-            class={[
-              "mt-4 rounded-xl px-4 py-3 text-sm leading-6",
-              @metadata_status == :error && "bg-red-50 text-red-800",
-              @metadata_status != :error && "bg-white text-slate-700 ring-1 ring-slate-200"
-            ]}
-          >
-            {@metadata_message}
-          </p>
-
-          <div :if={@metadata_results != []} id="metadata-results" class="mt-5 space-y-3">
-            <article
-              :for={result <- @metadata_results}
-              id={"metadata-result-#{result.id}"}
-              class="flex gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-            >
-              <img
-                :if={result.cover_url}
-                src={result.cover_url}
-                alt={"Cover of #{result.title}"}
-                class="h-24 w-16 shrink-0 rounded-lg bg-slate-100 object-cover"
-              />
-              <div class="min-w-0 flex-1">
-                <div class="flex flex-wrap items-start justify-between gap-2">
-                  <h3 class="font-semibold leading-6 text-slate-950">{result.title}</h3>
-                  <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[0.7rem] font-semibold text-slate-600">
-                    {metadata_provider_label(result.provider)}
-                  </span>
-                </div>
-                <p :if={result.author} class="mt-0.5 text-sm text-slate-600">{result.author}</p>
-                <p class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
-                  <span :if={result.publish_year}>{result.publish_year}</span>
-                  <span :if={result.language_code}>{String.upcase(result.language_code)}</span>
-                  <span :if={result.page_count}>{result.page_count} pages</span>
-                </p>
-                <div class="mt-3 flex flex-col gap-2 sm:flex-row">
-                  <button
-                    type="button"
-                    phx-click="select_metadata"
-                    phx-value-id={result.id}
-                    class="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-100 px-4 text-sm font-semibold text-amber-950 transition hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 sm:w-auto"
-                  >
-                    <.icon name="hero-arrow-down-tray" class="size-4" />
-                    {metadata_select_label(@book)}
-                  </button>
-                  <button
-                    :if={result.cover_url}
-                    type="button"
-                    phx-click="select_cover"
-                    phx-value-id={result.id}
-                    class="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-amber-400 hover:bg-amber-50 hover:text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 sm:w-auto"
-                  >
-                    <.icon name="hero-photo" class="size-4" /> Use cover only
-                  </button>
-                  <button
-                    :if={@selected_cover_result_id == result.id}
-                    id={"save-selected-cover-#{result.id}"}
-                    type="submit"
-                    form={form_id(@book)}
-                    phx-disable-with="Saving..."
-                    class="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-700 px-4 text-sm font-semibold text-white shadow-sm shadow-amber-900/15 transition hover:-translate-y-0.5 hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0 disabled:translate-y-0 sm:w-auto"
-                  >
-                    <.icon name="hero-book-open" class="size-4" /> {save_label(@book)}
-                  </button>
-                </div>
-              </div>
-            </article>
-          </div>
-
-          <section
-            :if={@pending_metadata}
-            id="metadata-review"
-            class="mt-5 rounded-2xl border border-amber-300 bg-amber-50 p-4 sm:p-5"
-          >
-            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-amber-800">
-              Use this book
-            </p>
-            <h3 class="mt-2 text-lg font-semibold text-slate-950">
-              {@pending_metadata.title}
-            </h3>
-            <p :if={@pending_metadata.author} class="mt-1 text-sm text-slate-600">
-              {@pending_metadata.author}
-            </p>
-
-            <dl class="mt-4 divide-y divide-amber-200 text-sm">
-              <div class="flex items-center justify-between gap-4 py-3">
-                <dt class="text-slate-600">Cover</dt>
-                <dd class="font-semibold text-slate-900">
-                  {if @pending_metadata.cover_url, do: "Available", else: "Not available"}
-                </dd>
-              </div>
-              <div class="flex items-center justify-between gap-4 py-3">
-                <dt class="text-slate-600">Page count</dt>
-                <dd class="font-semibold text-slate-900">
-                  {@pending_metadata.page_count || "Not available"}
-                </dd>
-              </div>
-              <div
-                :if={@pending_metadata.page_count}
-                class="flex items-center justify-between gap-4 py-3"
-              >
-                <dt class="text-slate-600">Estimated total words</dt>
-                <dd class="font-semibold text-slate-900">
-                  {BookFormat.number(@pending_metadata.page_count * 250)}
-                </dd>
-              </div>
-            </dl>
-
-            <p class="mt-4 text-xs leading-5 text-slate-600">
-              Title, author, notes, reading status, and reading dates will not be changed.
-            </p>
-            <div class="mt-4 grid gap-2 sm:grid-cols-2">
-              <button
-                id="apply-metadata"
-                type="button"
-                phx-click="apply_metadata"
-                class="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-amber-700 px-4 text-sm font-semibold text-white transition hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
-              >
-                <.icon name="hero-check" class="size-4" /> Apply Metadata
-              </button>
-              <button
-                id="cancel-metadata"
-                type="button"
-                phx-click="cancel_metadata"
-                class="inline-flex min-h-12 items-center justify-center rounded-xl border border-amber-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
-              >
-                Cancel
-              </button>
-            </div>
-          </section>
-        </section>
+          book={@book}
+          query={@metadata_query}
+          provider={@metadata_provider}
+          provider_options={@metadata_provider_options}
+          results={@metadata_results}
+          status={@metadata_status}
+          message={@metadata_message}
+          pending_metadata={@pending_metadata}
+          selected_cover_result_id={@selected_cover_result_id}
+          book_form_id={form_id(@book)}
+          save_label={save_label(@book)}
+        />
 
         <.form
           for={@form}
@@ -489,192 +283,15 @@ defmodule CiBookTrackerWeb.BookLive.Form do
           phx-submit="save"
           class="space-y-6 rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60 sm:p-8"
         >
-          <input type="hidden" name={@form[:cover_url].name} value={@form[:cover_url].value} />
-          <input type="hidden" name={@form[:cover_path].name} value={@form[:cover_path].value} />
-          <input
-            type="hidden"
-            name={@form[:cover_provider].name}
-            value={@form[:cover_provider].value}
+          <FormComponents.book_fields
+            form={@form}
+            book={@book}
+            estimator_form={@estimator_form}
+            estimator_result={@estimator_result}
+            uploads={@uploads}
+            status_options={@status_options}
+            save_label={save_label(@book)}
           />
-          <input type="hidden" name={@form[:cover_id].name} value={@form[:cover_id].value} />
-
-          <.input
-            field={@form[:title]}
-            label="Title"
-            placeholder="The Little Prince"
-            required
-            autocomplete="off"
-          />
-
-          <.input
-            field={@form[:author]}
-            label="Author"
-            placeholder="Antoine de Saint-Exupery"
-            autocomplete="off"
-          />
-
-          <div class="space-y-4">
-            <.input
-              field={@form[:page_count]}
-              type="number"
-              label="Page count"
-              placeholder="96"
-              min="1"
-              inputmode="numeric"
-            />
-
-            <div
-              :if={use_calculated_estimate?(@book, @form)}
-              id="calculated-estimated-words"
-              class="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5"
-            >
-              <input
-                type="hidden"
-                name={@form[:estimated_words].name}
-                value={@form[:estimated_words].value}
-              />
-              <input
-                type="hidden"
-                name={@form[:estimated_words_mode].name}
-                value="calculated"
-              />
-              <p class="text-sm font-medium text-slate-600">Estimated Total Words</p>
-              <p class="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
-                {BookFormat.number(@form[:estimated_words].value)}
-              </p>
-              <p class="mt-1 flex items-center gap-1.5 text-xs leading-5 text-slate-500">
-                <.icon name="hero-calculator" class="size-4" /> Using 250 words per page
-              </p>
-            </div>
-
-            <div :if={!use_calculated_estimate?(@book, @form)}>
-              <input
-                type="hidden"
-                name={@form[:estimated_words_mode].name}
-                value={@form[:estimated_words_mode].value || "manual"}
-              />
-              <.input
-                field={@form[:estimated_words]}
-                type="number"
-                label="Estimated Total Words"
-                placeholder="24000"
-                min="1"
-                inputmode="numeric"
-              />
-              <p :if={is_nil(@book)} class="-mt-2 text-xs leading-5 text-slate-500">
-                Enter a total directly or use the helper below.
-              </p>
-            </div>
-          </div>
-
-          <WordEstimatorComponents.panel
-            form={@estimator_form}
-            result={@estimator_result}
-            apply_event="apply_word_estimate"
-          />
-
-          <fieldset class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
-            <legend class="px-1 text-sm font-semibold text-slate-700">Cover art</legend>
-            <div class="mt-4 grid gap-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
-              <div class="space-y-4">
-                <.input
-                  field={@form[:cover_image_url]}
-                  type="url"
-                  label="Cover image URL"
-                  placeholder="https://m.media-amazon.com/images/I/71WLpK0hFYL._SL1499_.jpg"
-                  autocomplete="off"
-                />
-                <div>
-                  <label
-                    for={@uploads.cover_art.ref}
-                    class="block text-sm font-semibold leading-6 text-slate-900"
-                  >
-                    Upload cover image
-                  </label>
-                  <.live_file_input
-                    upload={@uploads.cover_art}
-                    class="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm text-slate-700 file:mr-4 file:rounded-lg file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
-                  />
-                  <p class="mt-2 text-xs leading-5 text-slate-500">
-                    JPG, PNG, WebP, or GIF up to 8 MB. Uploaded files take precedence over URLs.
-                  </p>
-                  <p
-                    :for={entry <- @uploads.cover_art.entries}
-                    id={"cover-upload-#{entry.ref}"}
-                    class="mt-2 text-xs font-medium text-slate-600"
-                  >
-                    {entry.client_name} · {entry.progress}%
-                  </p>
-                  <p
-                    :for={error <- upload_errors(@uploads.cover_art)}
-                    class="mt-2 text-xs font-semibold text-red-700"
-                  >
-                    {cover_upload_error(error)}
-                  </p>
-                </div>
-              </div>
-
-              <.book_cover
-                id="cover-preview"
-                title={cover_preview_title(@form)}
-                cover_path={@form[:cover_path].value}
-                cover_url={cover_preview_url(@form)}
-                cover_provider={@form[:cover_provider].value}
-                cover_id={cover_preview_id(@form[:cover_id].value)}
-                size={:detail}
-              />
-            </div>
-          </fieldset>
-
-          <.input
-            field={@form[:difficulty_label]}
-            label="Difficulty"
-            placeholder="Beginner, intermediate, advanced, A1, B2, ..."
-            autocomplete="off"
-          />
-
-          <div class="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 sm:p-5">
-            <.input
-              field={@form[:status]}
-              type="select"
-              label="Reading status"
-              options={@status_options}
-            />
-            <p class="-mt-2 text-xs leading-5 text-amber-900/70">
-              Adding a book you've already started or finished? Set its status here.
-            </p>
-          </div>
-
-          <fieldset class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
-            <legend class="px-1 text-sm font-semibold text-slate-700">Reading dates</legend>
-            <p class="mt-1 text-xs leading-5 text-slate-500">
-              Optional. Missing dates are filled automatically for in-progress and finished books.
-            </p>
-            <div class="mt-4 grid gap-5 sm:grid-cols-2">
-              <.input field={@form[:started_on]} type="date" label="Started on" />
-              <.input field={@form[:finished_on]} type="date" label="Finished on" />
-            </div>
-          </fieldset>
-
-          <.input
-            field={@form[:notes]}
-            type="textarea"
-            label="Notes"
-            placeholder="Why this book, reading plan, edition details..."
-            rows="5"
-          />
-
-          <div class="border-t border-slate-100 pt-6">
-            <.button
-              id="save-book"
-              type="submit"
-              variant="primary"
-              phx-disable-with="Saving..."
-              class="flex min-h-16 w-full items-center justify-center gap-3 rounded-2xl bg-amber-700 px-6 text-base font-semibold text-white shadow-lg shadow-amber-900/15 transition hover:-translate-y-0.5 hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0 disabled:translate-y-0"
-            >
-              <.icon name="hero-book-open" class="size-5" /> {save_label(@book)}
-            </.button>
-          </div>
         </.form>
       </section>
     </Layouts.app>
@@ -752,8 +369,8 @@ defmodule CiBookTrackerWeb.BookLive.Form do
   end
 
   defp persist_book(nil, reading_log, params) do
-    book_attributes = book_attributes(params)
-    cover_attributes = cover_attributes(params)
+    book_attributes = FormParams.book_attributes(params)
+    cover_attributes = FormParams.cover_attributes(params)
 
     if is_nil(cover_attributes.cover_path) do
       Library.add_book(reading_log.id, params["title"], book_attributes)
@@ -767,46 +384,22 @@ defmodule CiBookTrackerWeb.BookLive.Form do
   end
 
   defp persist_book(book, _reading_log, params) do
-    with {:ok, edited_book} <-
-           Library.edit_book(book, Map.put(book_attributes(params), :title, params["title"])) do
-      persist_cover_changes(book, edited_book, cover_attributes(params))
-    end
-  end
+    book_attributes =
+      params
+      |> FormParams.book_attributes()
+      |> Map.put(:title, params["title"])
 
-  defp book_attributes(params) do
-    params
-    |> Map.take([
-      "author",
-      "page_count",
-      "estimated_words",
-      "difficulty_label",
-      "status",
-      "started_on",
-      "finished_on",
-      "notes"
-    ])
-    |> Map.new(fn {key, value} -> {String.to_existing_atom(key), empty_to_nil(value)} end)
-  end
-
-  defp cover_attributes(params) do
-    params
-    |> Map.take(["cover_url", "cover_path", "cover_provider", "cover_id"])
-    |> Map.new(fn {key, value} -> {String.to_existing_atom(key), empty_to_nil(value)} end)
-  end
-
-  defp persist_cover_changes(original_book, edited_book, cover_attributes) do
-    existing_cover =
-      Map.take(original_book, [:cover_url, :cover_path, :cover_provider, :cover_id])
+    cover_attributes = FormParams.cover_attributes(params)
 
     cond do
-      existing_cover == cover_attributes ->
-        {:ok, edited_book}
+      !FormParams.cover_changed?(book, cover_attributes) ->
+        Library.edit_book(book, book_attributes)
 
       is_nil(cover_attributes.cover_path) ->
-        Library.remove_book_cover(edited_book)
+        Library.edit_book_without_cover(book, book_attributes)
 
       true ->
-        BookCover.attach(edited_book, cover_attributes)
+        BookCover.edit(book, Map.merge(book_attributes, cover_attributes))
     end
   end
 
@@ -816,52 +409,6 @@ defmodule CiBookTrackerWeb.BookLive.Form do
   end
 
   defp cleanup_unpersisted_cover(_book, _params), do: :ok
-
-  defp sync_estimated_words(params, %CiBookTracker.Library.Book{}) do
-    Map.put(params, "estimated_words_mode", "manual")
-  end
-
-  defp sync_estimated_words(params, nil) do
-    if params["estimated_words_mode"] == "sample" do
-      params
-    else
-      case parse_positive_integer(params["page_count"]) do
-        {:ok, page_count} ->
-          params
-          |> Map.put("estimated_words", Integer.to_string(page_count * 250))
-          |> Map.put("estimated_words_mode", "calculated")
-
-        :error ->
-          params
-          |> maybe_clear_calculated_estimate()
-          |> Map.put("estimated_words_mode", "manual")
-      end
-    end
-  end
-
-  defp maybe_clear_calculated_estimate(%{"estimated_words_mode" => "calculated"} = params),
-    do: Map.put(params, "estimated_words", "")
-
-  defp maybe_clear_calculated_estimate(params), do: params
-
-  defp put_if_present(params, _key, nil), do: params
-  defp put_if_present(params, key, value), do: Map.put(params, key, to_string(value))
-
-  defp put_metadata_estimate(params, nil), do: params
-
-  defp put_metadata_estimate(params, page_count) do
-    params
-    |> Map.put("estimated_words", Integer.to_string(page_count * 250))
-    |> Map.put("estimated_words_mode", "manual")
-  end
-
-  defp valid_page_count?(value), do: match?({:ok, _page_count}, parse_positive_integer(value))
-
-  defp use_calculated_estimate?(nil, form) do
-    form[:estimated_words_mode].value != "sample" && valid_page_count?(form[:page_count].value)
-  end
-
-  defp use_calculated_estimate?(_book, _form), do: false
 
   defp update_estimator(socket, params) do
     result =
@@ -880,40 +427,10 @@ defmodule CiBookTrackerWeb.BookLive.Form do
   end
 
   defp estimator_blank?(params) do
-    Enum.all?(["sample_text", "sample_units", "total_units"], &blank?(params[&1]))
-  end
-
-  defp parse_positive_integer(value) when is_integer(value) and value > 0, do: {:ok, value}
-
-  defp parse_positive_integer(value) when is_binary(value) do
-    case Integer.parse(value) do
-      {page_count, ""} when page_count > 0 -> {:ok, page_count}
-      _other -> :error
-    end
-  end
-
-  defp parse_positive_integer(_value), do: :error
-
-  defp normalize_params(params) do
-    params = Map.merge(@empty_params, params)
-
-    Enum.reduce(["title", "author", "difficulty_label"], params, fn key, params ->
-      Map.update!(params, key, &String.trim/1)
-    end)
-  end
-
-  defp empty_to_nil(value) when value in [nil, ""], do: nil
-  defp empty_to_nil(value), do: value
-
-  defp blank?(value), do: value in [nil, ""]
-
-  defp active_reading_log(session) do
-    id = session["active_reading_log_id"] || session["auto_open_reading_log_id"]
-
-    case id && Library.get_reading_log(id) do
-      {:ok, reading_log} -> reading_log
-      _missing -> nil
-    end
+    Enum.all?(
+      ["sample_text", "sample_units", "total_units"],
+      &FormParams.blank?(params[&1])
+    )
   end
 
   defp load_book(:new, _params, _reading_log), do: {:ok, nil}
@@ -928,43 +445,9 @@ defmodule CiBookTrackerWeb.BookLive.Form do
     end
   end
 
-  defp form_params(nil), do: @empty_params
-
-  defp form_params(book) do
-    %{
-      "title" => book.title || "",
-      "author" => book.author || "",
-      "page_count" => input_value(book.page_count),
-      "estimated_words" => input_value(book.estimated_words),
-      "estimated_words_mode" => "manual",
-      "cover_url" => book.cover_url || "",
-      "cover_path" => book.cover_path || "",
-      "cover_image_url" => "",
-      "cover_provider" => book.cover_provider || "",
-      "cover_id" => input_value(book.cover_id),
-      "difficulty_label" => book.difficulty_label || "",
-      "status" => Atom.to_string(book.status),
-      "started_on" => input_value(book.started_on),
-      "finished_on" => input_value(book.finished_on),
-      "notes" => book.notes || ""
-    }
-  end
-
   defp metadata_refresh?(nil, _params), do: false
   defp metadata_refresh?(_book, %{"metadata" => "refresh"}), do: true
   defp metadata_refresh?(_book, _params), do: false
-
-  defp initial_metadata_query(book, true) do
-    [book.title, book.author]
-    |> Enum.reject(&blank?/1)
-    |> Enum.join(" ")
-  end
-
-  defp initial_metadata_query(_book, _metadata_refresh?), do: ""
-
-  defp input_value(nil), do: ""
-  defp input_value(%Date{} = value), do: Date.to_iso8601(value)
-  defp input_value(value), do: to_string(value)
 
   defp page_title(:new), do: "Add book"
   defp page_title(:edit), do: "Edit book"
@@ -972,52 +455,6 @@ defmodule CiBookTrackerWeb.BookLive.Form do
   defp form_heading(_book), do: "Edit book"
   defp form_intro(nil), do: "Start with what you know. Everything except the title is optional."
   defp form_intro(_book), do: "Update the details and reading history for this book."
-
-  defp metadata_heading(nil), do: "Find Metadata"
-  defp metadata_heading(_book), do: "Refresh Metadata"
-
-  defp metadata_intro(nil), do: "Optional. Find a book, then review the details before saving."
-
-  defp metadata_intro(_book),
-    do:
-      "Search for a cover and missing book details without replacing your saved title or author."
-
-  defp metadata_select_label(nil), do: "Use this book"
-  defp metadata_select_label(_book), do: "Use this book"
-
-  defp put_cover_metadata(params, result) do
-    params
-    |> Map.put("cover_url", result.cover_url || "")
-    |> Map.put("cover_image_url", result.cover_url || "")
-    |> Map.put("cover_path", "")
-    |> Map.put("cover_provider", result.cover_provider || "")
-    |> Map.put("cover_id", input_value(result.cover_id))
-  end
-
-  defp cover_preview_url(form) do
-    case form[:cover_image_url].value do
-      value when is_binary(value) and value != "" -> value
-      _blank -> form[:cover_url].value
-    end
-  end
-
-  defp cover_preview_title(form) do
-    case form[:title].value do
-      value when is_binary(value) and value != "" -> value
-      _blank -> "Selected cover"
-    end
-  end
-
-  defp cover_preview_id(value) do
-    case parse_positive_integer(value) do
-      {:ok, cover_id} -> cover_id
-      :error -> nil
-    end
-  end
-
-  defp cover_upload_error(:too_large), do: "Choose an image smaller than 8 MB."
-  defp cover_upload_error(:not_accepted), do: "Choose a JPG, PNG, WebP, or GIF image."
-  defp cover_upload_error(_error), do: "The cover image could not be uploaded."
 
   defp cover_error_message(:invalid_url), do: "Enter a valid http or https cover image URL."
   defp cover_error_message(:download_failed), do: "We couldn't download that cover image."
@@ -1046,10 +483,6 @@ defmodule CiBookTrackerWeb.BookLive.Form do
   defp metadata_provider("hardcover"), do: :hardcover
   defp metadata_provider("all"), do: :all
   defp metadata_provider(_provider), do: :open_library
-
-  defp metadata_provider_label(:google_books), do: "Google Books"
-  defp metadata_provider_label(:hardcover), do: "Hardcover"
-  defp metadata_provider_label(_provider), do: "Open Library"
 
   defp metadata_error_message(:timeout),
     do: "The metadata source took too long to respond. Please try again."
