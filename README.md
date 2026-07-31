@@ -34,8 +34,7 @@ tool; it does not attempt to prove a particular theory of language learning.
 
 Further background:
 
-- [What is Extensive Reading?](https://erfoundation.org/wordpress/what_is/) from
-  the Extensive Reading Foundation
+- [What is Extensive Reading?](https://erfoundation.org/wordpress/what_is/)
 - [Project inspiration video](https://www.youtube.com/watch?v=OheGJ2geFnA)
 
 ## Features
@@ -109,7 +108,11 @@ original project philosophy.
 
 ### Book Details
 
-![Book details for a finished Spanish reader](docs/screenshots/book-details.png)
+![Book details for an in-progress Spanish reader](docs/screenshots/book-details.png)
+
+### Cover Art
+
+![Cover image URL, upload, and preview controls](docs/screenshots/cover-art.png)
 
 ## Development
 
