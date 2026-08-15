@@ -92,13 +92,20 @@ defmodule CiBookTrackerWeb.DashboardLive do
               <span aria-hidden="true" class="size-1 rounded-full bg-amber-400"></span>
               <span>Reading dashboard</span>
             </div>
-            <div class="flex items-center gap-1">
+            <div class="flex flex-wrap items-center justify-end gap-1">
               <.link
                 id="edit-reading-log"
                 navigate={~p"/reading-logs/#{@reading_log.id}/edit?from=dashboard"}
                 class="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-slate-600 transition hover:bg-white hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
               >
                 <.icon name="hero-cog-6-tooth" class="size-4" /> Log Settings
+              </.link>
+              <.link
+                id="dashboard-export-database"
+                href={~p"/backup/database"}
+                class="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-slate-600 transition hover:bg-white hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+              >
+                <.icon name="hero-arrow-down-tray" class="size-4" /> Export Backup
               </.link>
               <.link
                 id="switch-reading-log"

@@ -55,6 +55,12 @@ defmodule CiBookTrackerWeb.DashboardLiveTest do
 
     assert has_element?(
              view,
+             "#dashboard-export-database[href='/backup/database']",
+             "Export Backup"
+           )
+
+    assert has_element?(
+             view,
              "#edit-reading-log[href='/reading-logs/#{reading_log.id}/edit?from=dashboard']",
              "Log Settings"
            )
