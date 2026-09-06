@@ -64,6 +64,16 @@ defmodule CiBookTrackerWeb.BookLive.FormParamsTest do
     assert new_params["author"] == "Metadata author"
     assert new_params["estimated_words"] == "50000"
 
+    custom_params =
+      FormParams.empty()
+      |> Map.put("estimated_words", "27500")
+      |> Map.put("estimated_words_mode", "custom")
+      |> FormParams.apply_metadata(result, :new)
+
+    assert custom_params["page_count"] == "200"
+    assert custom_params["estimated_words"] == "27500"
+    assert custom_params["estimated_words_mode"] == "custom"
+
     edit_params =
       FormParams.empty()
       |> Map.put("title", "Saved title")
@@ -73,6 +83,18 @@ defmodule CiBookTrackerWeb.BookLive.FormParamsTest do
     assert edit_params["title"] == "Saved title"
     assert edit_params["author"] == "Saved author"
     assert edit_params["cover_id"] == "12"
+  end
+
+  test "does not replace blank or invalid custom estimates with a page calculation" do
+    for estimate <- ["", "0", "-1", "1.5"] do
+      params = %{
+        "page_count" => "120",
+        "estimated_words" => estimate,
+        "estimated_words_mode" => "custom"
+      }
+
+      assert FormParams.sync_estimated_words(params, nil) == params
+    end
   end
 
   test "serializes an existing book into form parameters" do

@@ -77,7 +77,8 @@ defmodule CiBookTrackerWeb.BookLive.FormParams do
   end
 
   def sync_estimated_words(params, nil) do
-    if params["estimated_words_mode"] == "sample" do
+    if params["estimated_words_mode"] in ["sample", "custom"] ||
+         (params["estimated_words_mode"] == "manual" && !blank?(params["estimated_words"])) do
       params
     else
       case parse_positive_integer(params["page_count"]) do
@@ -99,7 +100,7 @@ defmodule CiBookTrackerWeb.BookLive.FormParams do
     |> Map.put("title", result.title)
     |> put_if_present("author", result.author)
     |> put_if_present("page_count", result.page_count)
-    |> put_metadata_estimate(result.page_count)
+    |> sync_estimated_words(nil)
     |> apply_cover(result)
   end
 
@@ -120,7 +121,7 @@ defmodule CiBookTrackerWeb.BookLive.FormParams do
   end
 
   def calculated_estimate?(nil, form) do
-    form[:estimated_words_mode].value != "sample" &&
+    form[:estimated_words_mode].value == "calculated" &&
       match?({:ok, _page_count}, parse_positive_integer(form[:page_count].value))
   end
 

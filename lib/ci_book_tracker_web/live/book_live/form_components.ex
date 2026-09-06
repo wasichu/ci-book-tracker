@@ -258,6 +258,14 @@ defmodule CiBookTrackerWeb.BookLive.FormComponents do
         <p class="mt-1 flex items-center gap-1.5 text-xs leading-5 text-slate-500">
           <.icon name="hero-calculator" class="size-4" /> Using 250 words per page
         </p>
+        <button
+          id="enter-word-estimate"
+          type="button"
+          phx-click="enter_word_estimate"
+          class="mt-3 inline-flex items-center gap-1.5 rounded-lg text-sm font-semibold text-teal-700 transition-colors hover:text-teal-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-teal-600"
+        >
+          <.icon name="hero-pencil-square" class="size-4" /> Enter your own estimate
+        </button>
       </div>
 
       <div :if={!FormParams.calculated_estimate?(@book, @form)}>
@@ -275,7 +283,7 @@ defmodule CiBookTrackerWeb.BookLive.FormComponents do
           inputmode="numeric"
         />
         <p :if={is_nil(@book)} class="-mt-2 text-xs leading-5 text-slate-500">
-          Enter a total directly or use the helper below.
+          Enter the book's total word count, such as an estimate you found online, or use the helper below.
         </p>
       </div>
     </div>

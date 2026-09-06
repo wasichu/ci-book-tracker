@@ -78,6 +78,11 @@ defmodule CiBookTrackerWeb.BookLive.Form do
     {:noreply, assign(socket, :form, to_form(params, as: :book))}
   end
 
+  def handle_event("enter_word_estimate", _params, socket) do
+    params = Map.put(socket.assigns.form.params, "estimated_words_mode", "custom")
+    {:noreply, assign(socket, :form, to_form(params, as: :book))}
+  end
+
   def handle_event("apply_word_estimate", _params, socket) do
     case socket.assigns.estimator_result.estimated_words do
       estimate when is_integer(estimate) and estimate > 0 ->

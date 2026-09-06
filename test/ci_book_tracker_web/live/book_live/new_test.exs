@@ -365,7 +365,7 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     refute has_element?(view, "#book_estimated_words[type='number']")
   end
 
-  test "page count overrides a conflicting manual estimate", %{conn: conn} do
+  test "preserves a manual estimate alongside page count", %{conn: conn} do
     {conn, _reading_log} = create_reading_log(conn)
     {:ok, view, _html} = live(conn, ~p"/books/new")
 
@@ -373,8 +373,39 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     |> form("#add-book-form", book: %{page_count: "120", estimated_words: "27500"})
     |> render_change()
 
-    assert has_element?(view, "#calculated-estimated-words", "30,000")
-    assert has_element?(view, "input[name='book[estimated_words]'][value='30000']")
+    refute has_element?(view, "#calculated-estimated-words")
+    assert has_element?(view, "#book_estimated_words[type='number'][value='27500']")
+  end
+
+  test "replaces a page estimate with a custom total and saves it after changing pages", %{
+    conn: conn
+  } do
+    {conn, reading_log} = create_reading_log(conn)
+    {:ok, view, _html} = live(conn, ~p"/books/new")
+
+    view
+    |> form("#add-book-form", book: %{title: "Known word count", page_count: "120"})
+    |> render_change()
+
+    view |> element("#enter-word-estimate") |> render_click()
+    assert has_element?(view, "#book_estimated_words[type='number'][value='30000']")
+
+    view
+    |> form("#add-book-form", book: %{estimated_words: "27500"})
+    |> render_change()
+
+    view
+    |> form("#add-book-form", book: %{page_count: "200"})
+    |> render_change()
+
+    assert has_element?(view, "#book_estimated_words[value='27500']")
+    refute has_element?(view, "#calculated-estimated-words")
+
+    view |> form("#add-book-form") |> render_submit()
+
+    [book] = Library.list_books!(query: [filter: [reading_log_id: reading_log.id]])
+    assert book.page_count == 200
+    assert book.estimated_words == 27_500
   end
 
   test "allows a manual total when page count is blank", %{conn: conn} do
