@@ -8,7 +8,7 @@ defmodule CiBookTrackerWeb.BookLive.FormParams do
     "author" => "",
     "page_count" => "",
     "estimated_words" => "",
-    "estimated_words_mode" => "manual",
+    "estimated_words_mode" => "unset",
     "cover_url" => "",
     "cover_path" => "",
     "cover_image_url" => "",
@@ -72,26 +72,25 @@ defmodule CiBookTrackerWeb.BookLive.FormParams do
     Map.take(book, [:cover_url, :cover_path, :cover_provider, :cover_id]) != cover_attributes
   end
 
-  def sync_estimated_words(params, %Book{}) do
-    Map.put(params, "estimated_words_mode", "manual")
-  end
+  @doc """
+  Updates the word estimate according to the form's mode:
 
-  def sync_estimated_words(params, nil) do
-    if params["estimated_words_mode"] in ["sample", "custom"] ||
-         (params["estimated_words_mode"] == "manual" && !blank?(params["estimated_words"])) do
-      params
+  * `unset`: choose manual entry when a total is supplied, otherwise estimate from pages.
+  * `calculated`: keep the total in step with the page count; removing pages resets to unset.
+  * `manual`: preserve the total, including blanks. Applied samples also use this mode.
+
+  Existing books start in manual mode so editing their pages never changes their total.
+  """
+  def sync_estimated_words(%{"estimated_words_mode" => "manual"} = params), do: params
+
+  def sync_estimated_words(%{"estimated_words_mode" => "calculated"} = params),
+    do: calculate_estimated_words(params)
+
+  def sync_estimated_words(params) do
+    if blank?(params["estimated_words"]) do
+      calculate_estimated_words(params)
     else
-      case parse_positive_integer(params["page_count"]) do
-        {:ok, page_count} ->
-          params
-          |> Map.put("estimated_words", Integer.to_string(page_count * 250))
-          |> Map.put("estimated_words_mode", "calculated")
-
-        :error ->
-          params
-          |> maybe_clear_calculated_estimate()
-          |> Map.put("estimated_words_mode", "manual")
-      end
+      Map.put(params, "estimated_words_mode", "manual")
     end
   end
 
@@ -100,14 +99,14 @@ defmodule CiBookTrackerWeb.BookLive.FormParams do
     |> Map.put("title", result.title)
     |> put_if_present("author", result.author)
     |> put_if_present("page_count", result.page_count)
-    |> sync_estimated_words(nil)
+    |> sync_estimated_words()
     |> apply_cover(result)
   end
 
   def apply_metadata(params, result, :edit) do
     params
     |> put_if_present("page_count", result.page_count)
-    |> put_metadata_estimate(result.page_count)
+    |> replace_estimate_from_metadata(result.page_count)
     |> apply_cover(result)
   end
 
@@ -120,12 +119,7 @@ defmodule CiBookTrackerWeb.BookLive.FormParams do
     |> Map.put("cover_id", input_value(result.cover_id))
   end
 
-  def calculated_estimate?(nil, form) do
-    form[:estimated_words_mode].value == "calculated" &&
-      match?({:ok, _page_count}, parse_positive_integer(form[:page_count].value))
-  end
-
-  def calculated_estimate?(%Book{}, _form), do: false
+  def calculated_estimate?(form), do: form[:estimated_words_mode].value == "calculated"
 
   def initial_metadata_query(%Book{} = book, true) do
     [book.title, book.author]
@@ -164,21 +158,34 @@ defmodule CiBookTrackerWeb.BookLive.FormParams do
     |> Map.new(fn {key, value} -> {String.to_existing_atom(key), empty_to_nil(value)} end)
   end
 
-  defp maybe_clear_calculated_estimate(%{"estimated_words_mode" => "calculated"} = params),
-    do: Map.put(params, "estimated_words", "")
+  defp calculate_estimated_words(params) do
+    case parse_positive_integer(params["page_count"]) do
+      {:ok, page_count} ->
+        params
+        |> Map.put("estimated_words", words_from_pages(page_count))
+        |> Map.put("estimated_words_mode", "calculated")
 
-  defp maybe_clear_calculated_estimate(params), do: params
+      :error ->
+        params
+        |> Map.put("estimated_words", "")
+        |> Map.put("estimated_words_mode", "unset")
+    end
+  end
 
   defp put_if_present(params, _key, nil), do: params
   defp put_if_present(params, key, value), do: Map.put(params, key, to_string(value))
 
-  defp put_metadata_estimate(params, nil), do: params
+  defp replace_estimate_from_metadata(params, nil), do: params
 
-  defp put_metadata_estimate(params, page_count) do
+  # Applying reviewed metadata explicitly replaces the total once. Subsequent page
+  # edits leave it alone, just like any other estimate on an existing book.
+  defp replace_estimate_from_metadata(params, page_count) do
     params
-    |> Map.put("estimated_words", Integer.to_string(page_count * 250))
+    |> Map.put("estimated_words", words_from_pages(page_count))
     |> Map.put("estimated_words_mode", "manual")
   end
+
+  defp words_from_pages(page_count), do: Integer.to_string(page_count * 250)
 
   defp parse_positive_integer(value) when is_integer(value) and value > 0, do: {:ok, value}
 

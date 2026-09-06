@@ -420,6 +420,28 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     refute has_element?(view, "#calculated-estimated-words")
   end
 
+  test "clearing a manual total keeps it blank through page changes and saving", %{conn: conn} do
+    {conn, reading_log} = create_reading_log(conn)
+    {:ok, view, _html} = live(conn, ~p"/books/new")
+
+    view
+    |> form("#add-book-form", book: %{title: "No word estimate", estimated_words: "27500"})
+    |> render_change()
+
+    view
+    |> form("#add-book-form", book: %{estimated_words: "", page_count: "120"})
+    |> render_change()
+
+    assert has_element?(view, "#book_estimated_words[type='number'][value='']")
+    refute has_element?(view, "#calculated-estimated-words")
+
+    view |> form("#add-book-form") |> render_submit()
+
+    [book] = Library.list_books!(query: [filter: [reading_log_id: reading_log.id]])
+    assert book.page_count == 120
+    assert is_nil(book.estimated_words)
+  end
+
   test "calculates and applies a sample-based word estimate", %{conn: conn} do
     {conn, reading_log} = create_reading_log(conn)
     {:ok, view, _html} = live(conn, ~p"/books/new")
@@ -443,8 +465,11 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     view |> element("#apply-word-estimate") |> render_click()
 
     assert has_element?(view, "#book_estimated_words[value='300']")
-    assert has_element?(view, "input[name='book[estimated_words_mode]'][value='sample']")
+    assert has_element?(view, "input[name='book[estimated_words_mode]'][value='manual']")
     refute has_element?(view, "#calculated-estimated-words")
+
+    view |> form("#add-book-form", book: %{page_count: "200"}) |> render_change()
+    assert has_element?(view, "#book_estimated_words[value='300']")
 
     view |> form("#add-book-form") |> render_submit()
 

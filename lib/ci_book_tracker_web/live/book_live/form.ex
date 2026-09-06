@@ -4,10 +4,10 @@ defmodule CiBookTrackerWeb.BookLive.Form do
   alias CiBookTracker.Library
   alias CiBookTracker.Library.BookCover
   alias CiBookTracker.Library.BookMetadata
-  alias CiBookTracker.Library.WordEstimator
   alias CiBookTracker.Settings.MetadataProviders
   alias CiBookTrackerWeb.BookLive.{FormComponents, FormParams}
   alias CiBookTrackerWeb.ReadingLogSession
+  alias CiBookTrackerWeb.WordEstimatorForm
 
   @status_options [
     {"Want to read", "want_to_read"},
@@ -15,13 +15,6 @@ defmodule CiBookTrackerWeb.BookLive.Form do
     {"Finished", "finished"},
     {"Abandoned", "abandoned"}
   ]
-
-  @estimator_params %{
-    "sample_text" => "",
-    "sample_units" => "",
-    "total_units" => "",
-    "unit_type" => "pages"
-  }
 
   @impl true
   def mount(params, session, socket) do
@@ -37,8 +30,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
        |> assign(:reading_log, reading_log)
        |> assign(:book, book)
        |> assign(:status_options, @status_options)
-       |> assign(:estimator_form, to_form(@estimator_params, as: :estimator))
-       |> assign(:estimator_result, %{sample_words: 0, estimated_words: nil, message: nil})
+       |> update_estimator(%{})
        |> assign(:metadata_provider_options, metadata_provider_options())
        |> assign(:metadata_provider, "open_library")
        |> assign(:metadata_refresh?, metadata_refresh?)
@@ -64,22 +56,17 @@ defmodule CiBookTrackerWeb.BookLive.Form do
   end
 
   @impl true
-  def handle_event("validate", %{"book" => params, "estimator" => estimator_params}, socket) do
-    params = FormParams.sync_estimated_words(params, socket.assigns.book)
+  def handle_event("validate", %{"book" => params} = event, socket) do
+    params = FormParams.sync_estimated_words(params)
 
     {:noreply,
      socket
      |> assign(:form, to_form(params, as: :book))
-     |> update_estimator(estimator_params)}
-  end
-
-  def handle_event("validate", %{"book" => params}, socket) do
-    params = FormParams.sync_estimated_words(params, socket.assigns.book)
-    {:noreply, assign(socket, :form, to_form(params, as: :book))}
+     |> update_estimator(event["estimator"])}
   end
 
   def handle_event("enter_word_estimate", _params, socket) do
-    params = Map.put(socket.assigns.form.params, "estimated_words_mode", "custom")
+    params = Map.put(socket.assigns.form.params, "estimated_words_mode", "manual")
     {:noreply, assign(socket, :form, to_form(params, as: :book))}
   end
 
@@ -89,7 +76,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
         params =
           socket.assigns.form.params
           |> Map.put("estimated_words", Integer.to_string(estimate))
-          |> Map.put("estimated_words_mode", "sample")
+          |> Map.put("estimated_words_mode", "manual")
 
         {:noreply, assign(socket, :form, to_form(params, as: :book))}
 
@@ -101,8 +88,8 @@ defmodule CiBookTrackerWeb.BookLive.Form do
   def handle_event("save", %{"book" => params}, socket) do
     params =
       params
-      |> FormParams.sync_estimated_words(socket.assigns.book)
       |> FormParams.normalize()
+      |> FormParams.sync_estimated_words()
 
     if FormParams.blank?(params["title"]) do
       form =
@@ -415,27 +402,14 @@ defmodule CiBookTrackerWeb.BookLive.Form do
 
   defp cleanup_unpersisted_cover(_book, _params), do: :ok
 
+  defp update_estimator(socket, nil), do: socket
+
   defp update_estimator(socket, params) do
-    result =
-      if estimator_blank?(params) do
-        %{sample_words: 0, estimated_words: nil, message: nil}
-      else
-        case WordEstimator.evaluate(params) do
-          {:ok, result} -> Map.put(result, :message, nil)
-          {:error, result} -> Map.put(result, :estimated_words, nil)
-        end
-      end
+    {form, result} = WordEstimatorForm.build(params)
 
     socket
-    |> assign(:estimator_form, to_form(Map.merge(@estimator_params, params), as: :estimator))
+    |> assign(:estimator_form, form)
     |> assign(:estimator_result, result)
-  end
-
-  defp estimator_blank?(params) do
-    Enum.all?(
-      ["sample_text", "sample_units", "total_units"],
-      &FormParams.blank?(params[&1])
-    )
   end
 
   defp load_book(:new, _params, _reading_log), do: {:ok, nil}

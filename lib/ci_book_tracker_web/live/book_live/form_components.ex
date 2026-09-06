@@ -241,7 +241,7 @@ defmodule CiBookTrackerWeb.BookLive.FormComponents do
       />
 
       <div
-        :if={FormParams.calculated_estimate?(@book, @form)}
+        :if={FormParams.calculated_estimate?(@form)}
         id="calculated-estimated-words"
         class="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5"
       >
@@ -268,11 +268,11 @@ defmodule CiBookTrackerWeb.BookLive.FormComponents do
         </button>
       </div>
 
-      <div :if={!FormParams.calculated_estimate?(@book, @form)}>
+      <div :if={!FormParams.calculated_estimate?(@form)}>
         <input
           type="hidden"
           name={@form[:estimated_words_mode].name}
-          value={@form[:estimated_words_mode].value || "manual"}
+          value={@form[:estimated_words_mode].value}
         />
         <.input
           field={@form[:estimated_words]}

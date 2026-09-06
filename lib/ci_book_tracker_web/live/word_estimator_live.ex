@@ -1,25 +1,15 @@
 defmodule CiBookTrackerWeb.WordEstimatorLive do
   use CiBookTrackerWeb, :live_view
 
-  alias CiBookTracker.Library.WordEstimator
   alias CiBookTrackerWeb.WordEstimatorComponents
-
-  @empty_params %{
-    "sample_text" => "",
-    "sample_units" => "",
-    "total_units" => "",
-    "unit_type" => "pages"
-  }
-
-  @empty_result %{sample_words: 0, estimated_words: nil, message: nil}
+  alias CiBookTrackerWeb.WordEstimatorForm
 
   @impl true
   def mount(_params, _session, socket) do
     {:ok,
      socket
      |> assign(:page_title, "Word estimator")
-     |> assign(:form, to_form(@empty_params, as: :estimator))
-     |> assign(:result, @empty_result)}
+     |> assign_estimate(%{})}
   end
 
   @impl true
@@ -28,10 +18,7 @@ defmodule CiBookTrackerWeb.WordEstimatorLive do
   end
 
   def handle_event("clear", _params, socket) do
-    {:noreply,
-     socket
-     |> assign(:form, to_form(@empty_params, as: :estimator))
-     |> assign(:result, @empty_result)}
+    {:noreply, assign_estimate(socket, %{})}
   end
 
   @impl true
@@ -67,22 +54,10 @@ defmodule CiBookTrackerWeb.WordEstimatorLive do
   end
 
   defp assign_estimate(socket, params) do
-    result =
-      if blank?(params) do
-        @empty_result
-      else
-        case WordEstimator.evaluate(params) do
-          {:ok, result} -> Map.put(result, :message, nil)
-          {:error, result} -> Map.put(result, :estimated_words, nil)
-        end
-      end
+    {form, result} = WordEstimatorForm.build(params)
 
     socket
-    |> assign(:form, to_form(Map.merge(@empty_params, params), as: :estimator))
+    |> assign(:form, form)
     |> assign(:result, result)
-  end
-
-  defp blank?(params) do
-    Enum.all?(["sample_text", "sample_units", "total_units"], &(params[&1] in [nil, ""]))
   end
 end
