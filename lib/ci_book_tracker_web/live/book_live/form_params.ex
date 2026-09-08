@@ -1,7 +1,7 @@
 defmodule CiBookTrackerWeb.BookLive.FormParams do
   @moduledoc false
 
-  alias CiBookTracker.Library.Book
+  alias CiBookTracker.Library.{Book, WordEstimator}
 
   @empty %{
     "title" => "",
@@ -185,7 +185,8 @@ defmodule CiBookTrackerWeb.BookLive.FormParams do
     |> Map.put("estimated_words_mode", "manual")
   end
 
-  defp words_from_pages(page_count), do: Integer.to_string(page_count * 250)
+  defp words_from_pages(page_count),
+    do: page_count |> WordEstimator.from_pages() |> Integer.to_string()
 
   defp parse_positive_integer(value) when is_integer(value) and value > 0, do: {:ok, value}
 

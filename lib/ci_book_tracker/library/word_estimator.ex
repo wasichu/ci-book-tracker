@@ -1,9 +1,15 @@
 defmodule CiBookTracker.Library.WordEstimator do
   @moduledoc """
-  Counts a representative text sample and scales it to a whole-book estimate.
+  Estimates book length from a page count or a representative text sample.
   """
 
   @word_pattern ~r/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/u
+
+  @doc "Returns a rough estimate at 250 words per page, or nil when pages are unknown."
+  def from_pages(nil), do: nil
+
+  def from_pages(page_count) when is_integer(page_count) and page_count > 0,
+    do: page_count * 250
 
   def evaluate(params) do
     sample_text = Map.get(params, "sample_text", "")

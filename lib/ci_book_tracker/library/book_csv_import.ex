@@ -2,6 +2,8 @@ defmodule CiBookTracker.Library.BookCsvImport do
   @moduledoc false
 
   alias CiBookTracker.Library
+  alias CiBookTracker.CsvParser
+  alias CiBookTracker.Library.WordEstimator
 
   @columns ~w(
     title
@@ -22,7 +24,7 @@ defmodule CiBookTracker.Library.BookCsvImport do
   end
 
   def preview(contents, today \\ Date.utc_today()) when is_binary(contents) do
-    with {:ok, rows} <- parse_csv(contents),
+    with {:ok, rows} <- CsvParser.parse(contents),
          {:ok, headers, data_rows} <- split_headers(rows),
          :ok <- validate_headers(headers) do
       rows =
@@ -154,7 +156,10 @@ defmodule CiBookTracker.Library.BookCsvImport do
   defp attributes(values, today) do
     status = parse_status(values["status"])
     page_count = parse_integer(values["page_count"])
-    estimated_words = parse_integer(values["estimated_words"]) || estimate_words(page_count)
+
+    estimated_words =
+      parse_integer(values["estimated_words"]) || WordEstimator.from_pages(page_count)
+
     finished_on = parse_date(values["finished_on"]) || default_finished_on(status, today)
     started_on = parse_date(values["started_on"]) || default_started_on(status, finished_on)
 
@@ -194,9 +199,6 @@ defmodule CiBookTracker.Library.BookCsvImport do
     end
   end
 
-  defp estimate_words(nil), do: nil
-  defp estimate_words(page_count), do: page_count * 250
-
   defp default_finished_on(:finished, today), do: today
   defp default_finished_on(_status, _today), do: nil
 
@@ -217,61 +219,4 @@ defmodule CiBookTracker.Library.BookCsvImport do
 
   defp maybe_add(errors, _message, false), do: errors
   defp maybe_add(errors, message, true), do: [message | errors]
-
-  defp parse_csv(contents) do
-    contents
-    |> String.replace("\r\n", "\n")
-    |> String.replace("\r", "\n")
-    |> do_parse_csv([], [], "", :field_start)
-  end
-
-  defp do_parse_csv(<<>>, _rows, _row, _field, :quoted),
-    do: {:error, ["The CSV contains an unterminated quoted field."]}
-
-  defp do_parse_csv(<<>>, rows, row, field, _state) do
-    rows =
-      if row == [] and field == "" do
-        rows
-      else
-        [Enum.reverse([field | row]) | rows]
-      end
-
-    {:ok, Enum.reverse(rows)}
-  end
-
-  defp do_parse_csv(<<"\"", rest::binary>>, rows, row, "", :field_start),
-    do: do_parse_csv(rest, rows, row, "", :quoted)
-
-  defp do_parse_csv(<<"\"\"", rest::binary>>, rows, row, field, :quoted),
-    do: do_parse_csv(rest, rows, row, field <> "\"", :quoted)
-
-  defp do_parse_csv(<<"\"", rest::binary>>, rows, row, field, :quoted),
-    do: do_parse_csv(rest, rows, row, field, :after_quote)
-
-  defp do_parse_csv(<<",", rest::binary>>, rows, row, field, state)
-       when state in [:field_start, :unquoted, :after_quote],
-       do: do_parse_csv(rest, rows, [field | row], "", :field_start)
-
-  defp do_parse_csv(<<"\n", rest::binary>>, rows, row, field, state)
-       when state in [:field_start, :unquoted, :after_quote],
-       do: do_parse_csv(rest, [Enum.reverse([field | row]) | rows], [], "", :field_start)
-
-  defp do_parse_csv(<<"\n", rest::binary>>, rows, row, field, :quoted),
-    do: do_parse_csv(rest, rows, row, field <> "\n", :quoted)
-
-  defp do_parse_csv(<<character::utf8, rest::binary>>, rows, row, field, :after_quote)
-       when character in [?\s, ?\t],
-       do: do_parse_csv(rest, rows, row, field, :after_quote)
-
-  defp do_parse_csv(<<_character::utf8, _rest::binary>>, _rows, _row, _field, :after_quote),
-    do: {:error, ["A quoted field contains unexpected text after its closing quote."]}
-
-  defp do_parse_csv(<<"\"", _rest::binary>>, _rows, _row, _field, :unquoted),
-    do: {:error, ["Quotes must begin at the start of a CSV field."]}
-
-  defp do_parse_csv(<<character::utf8, rest::binary>>, rows, row, field, state)
-       when state in [:field_start, :unquoted, :quoted] do
-    next_state = if state == :field_start, do: :unquoted, else: state
-    do_parse_csv(rest, rows, row, field <> <<character::utf8>>, next_state)
-  end
 end

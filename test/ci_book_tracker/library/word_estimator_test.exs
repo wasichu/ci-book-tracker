@@ -3,6 +3,12 @@ defmodule CiBookTracker.Library.WordEstimatorTest do
 
   alias CiBookTracker.Library.WordEstimator
 
+  test "estimates from known pages and preserves missing page counts" do
+    assert WordEstimator.from_pages(120) == 30_000
+    assert WordEstimator.from_pages(1) == 250
+    assert WordEstimator.from_pages(nil) == nil
+  end
+
   test "counts English and Spanish words with accents and apostrophes" do
     assert WordEstimator.count_words("¡Hola, señor! L'été isn't over.") == 5
   end

@@ -2,7 +2,7 @@ defmodule CiBookTrackerWeb.BookLive.Show do
   use CiBookTrackerWeb, :live_view
 
   alias CiBookTracker.Library
-  alias CiBookTrackerWeb.{BookFormat, ReadingLogSession}
+  alias CiBookTrackerWeb.{BookActions, BookFormat, ReadingLogSession}
 
   @impl true
   def mount(%{"id" => id}, session, socket) do
@@ -130,18 +130,19 @@ defmodule CiBookTrackerWeb.BookLive.Show do
           </p>
           <div class="mt-4 grid gap-3 sm:grid-cols-2">
             <button
-              :for={{action, label, icon, button_class} <- status_actions(@book.status)}
+              :for={{action, layout_class} <- status_actions(@book.status)}
               id={"book-#{action}"}
               type="button"
               phx-click="update_status"
               phx-value-action={action}
-              phx-disable-with={"#{label}..."}
+              phx-disable-with={"#{BookActions.label(action)}..."}
               class={[
                 "inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl px-5 text-sm font-semibold transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0 disabled:translate-y-0 disabled:cursor-wait disabled:opacity-60",
-                button_class
+                BookActions.class(action),
+                layout_class
               ]}
             >
-              <.icon name={icon} class="size-4" /> {label}
+              <.icon name={BookActions.icon(action)} class="size-4" /> {BookActions.label(action)}
             </button>
           </div>
         </section>
@@ -288,22 +289,10 @@ defmodule CiBookTrackerWeb.BookLive.Show do
   defp update_book_status(book, "finish"), do: Library.finish_book(book)
   defp update_book_status(book, "abandon"), do: Library.abandon_book(book)
 
-  defp status_actions(:want_to_read) do
-    [
-      {"start", "Start", "hero-play", "bg-sky-700 text-white hover:bg-sky-800"},
-      {"finish", "Finish", "hero-check", "bg-emerald-700 text-white hover:bg-emerald-800"},
-      {"abandon", "Abandon", "hero-archive-box",
-       "sm:col-span-2 bg-slate-200 text-slate-800 hover:bg-slate-300"}
-    ]
-  end
+  defp status_actions(:want_to_read),
+    do: [{"start", nil}, {"finish", nil}, {"abandon", "sm:col-span-2"}]
 
-  defp status_actions(:in_progress) do
-    [
-      {"finish", "Finish", "hero-check", "bg-emerald-700 text-white hover:bg-emerald-800"},
-      {"abandon", "Abandon", "hero-archive-box", "bg-slate-200 text-slate-800 hover:bg-slate-300"}
-    ]
-  end
-
+  defp status_actions(:in_progress), do: [{"finish", nil}, {"abandon", nil}]
   defp status_actions(status) when status in [:finished, :abandoned], do: []
 
   defp format_pages(nil), do: nil

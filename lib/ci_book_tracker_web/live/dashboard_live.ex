@@ -2,7 +2,14 @@ defmodule CiBookTrackerWeb.DashboardLive do
   use CiBookTrackerWeb, :live_view
 
   alias CiBookTracker.Library
-  alias CiBookTrackerWeb.{BookFormat, ReadingLogFormat, ReadingLogSession}
+
+  alias CiBookTrackerWeb.{
+    BookActions,
+    BookFormat,
+    DashboardData,
+    ReadingLogFormat,
+    ReadingLogSession
+  }
 
   @status_groups [
     {:in_progress, "In progress", "hero-book-open", "bg-sky-100 text-sky-800"},
@@ -57,7 +64,10 @@ defmodule CiBookTrackerWeb.DashboardLive do
   def handle_event("filter_difficulty", %{"difficulty" => difficulty}, socket) do
     {:noreply,
      socket
-     |> assign(:difficulty_filter, parse_difficulty_filter(difficulty, socket.assigns))
+     |> assign(
+       :difficulty_filter,
+       DashboardData.resolve_difficulty(difficulty, socket.assigns.difficulty_options)
+     )
      |> apply_book_filters()}
   end
 
@@ -457,45 +467,31 @@ defmodule CiBookTrackerWeb.DashboardLive do
         aria-label={"Status actions for #{@book.title}"}
       >
         <button
-          :for={{action, label, icon, button_class} <- status_actions(@book.status)}
+          :for={{action, layout_class} <- status_actions(@book.status)}
           id={"book-#{@book.id}-#{action}"}
           type="button"
           phx-click="update_status"
           phx-value-action={action}
           phx-value-book_id={@book.id}
-          phx-disable-with={"#{label}..."}
+          phx-disable-with={"#{BookActions.label(action)}..."}
           class={[
             "inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60",
-            button_class
+            BookActions.class(action),
+            layout_class
           ]}
         >
-          <.icon name={icon} class="size-4" /> {label}
+          <.icon name={BookActions.icon(action)} class="size-4" /> {BookActions.label(action)}
         </button>
       </div>
     </article>
     """
   end
 
-  defp status_actions(:want_to_read) do
-    [
-      {"start", "Start", "hero-play", "bg-sky-700 text-white hover:bg-sky-800"},
-      {"finish", "Finish", "hero-check", "bg-emerald-700 text-white hover:bg-emerald-800"}
-    ]
-  end
+  defp status_actions(:want_to_read), do: [{"start", nil}, {"finish", nil}]
+  defp status_actions(:in_progress), do: [{"finish", nil}, {"abandon", nil}]
 
-  defp status_actions(:in_progress) do
-    [
-      {"finish", "Finish", "hero-check", "bg-emerald-700 text-white hover:bg-emerald-800"},
-      {"abandon", "Abandon", "hero-archive-box", "bg-slate-200 text-slate-800 hover:bg-slate-300"}
-    ]
-  end
-
-  defp status_actions(status) when status in [:finished, :abandoned] do
-    [
-      {"reopen", "Reopen", "hero-arrow-path",
-       "col-span-2 bg-slate-900 text-white hover:bg-amber-800"}
-    ]
-  end
+  defp status_actions(status) when status in [:finished, :abandoned],
+    do: [{"reopen", "col-span-2"}]
 
   defp assign_dashboard(socket, nil) do
     assign(socket,
@@ -507,7 +503,7 @@ defmodule CiBookTrackerWeb.DashboardLive do
       difficulty_options: [],
       filtering?: false,
       matching_book_count: 0,
-      summary: empty_summary()
+      summary: DashboardData.summarize([], nil)
     )
   end
 
@@ -526,58 +522,10 @@ defmodule CiBookTrackerWeb.DashboardLive do
       all_books: books,
       status_groups: @status_groups,
       status_filters: @status_filters,
-      difficulty_options: difficulty_options(books),
-      summary: summarize(books, reading_log.word_goal)
+      difficulty_options: DashboardData.difficulty_options(books),
+      summary: DashboardData.summarize(books, reading_log.word_goal)
     )
     |> apply_book_filters()
-  end
-
-  defp summarize(books, word_goal) do
-    books_finished = Enum.count(books, &(&1.status == :finished))
-    books_in_progress = Enum.count(books, &(&1.status == :in_progress))
-
-    words_completed =
-      books
-      |> Enum.filter(&(&1.status == :finished))
-      |> Enum.map(&(&1.estimated_words || 0))
-      |> Enum.sum()
-
-    in_progress_books = Enum.filter(books, &(&1.status == :in_progress))
-
-    words_in_progress =
-      in_progress_books
-      |> Enum.map(&(&1.estimated_words || 0))
-      |> Enum.sum()
-
-    pages_in_progress =
-      in_progress_books
-      |> Enum.map(&(&1.page_count || 0))
-      |> Enum.sum()
-
-    %{
-      books_finished: books_finished,
-      books_in_progress: books_in_progress,
-      words_in_progress: words_in_progress,
-      pages_in_progress: pages_in_progress,
-      words_completed: words_completed,
-      goal_progress: goal_progress(words_completed, word_goal)
-    }
-  end
-
-  defp goal_progress(_words_completed, nil), do: 0
-
-  defp goal_progress(words_completed, word_goal),
-    do: min(round(words_completed / word_goal * 100), 100)
-
-  defp empty_summary do
-    %{
-      books_finished: 0,
-      books_in_progress: 0,
-      words_in_progress: 0,
-      pages_in_progress: 0,
-      words_completed: 0,
-      goal_progress: 0
-    }
   end
 
   defp in_progress_label(%{words_in_progress: words}) when words > 0, do: "Words in progress"
@@ -609,17 +557,7 @@ defmodule CiBookTrackerWeb.DashboardLive do
     difficulty_filter = socket.assigns.difficulty_filter
 
     books =
-      Enum.filter(socket.assigns.all_books, fn book ->
-        status_matches? = status_filter == :all || book.status == status_filter
-        search_matches? = query == "" || book_matches_search?(book, query)
-
-        difficulty_matches? =
-          difficulty_filter == :all ||
-            normalized_difficulty(book.difficulty_label) ==
-              normalized_difficulty(difficulty_filter)
-
-        status_matches? && search_matches? && difficulty_matches?
-      end)
+      DashboardData.filter(socket.assigns.all_books, query, status_filter, difficulty_filter)
 
     assign(socket,
       books_by_status:
@@ -629,37 +567,11 @@ defmodule CiBookTrackerWeb.DashboardLive do
     )
   end
 
-  defp book_matches_search?(book, query) do
-    String.contains?(String.downcase(book.title), query) ||
-      String.contains?(String.downcase(book.author || ""), query)
-  end
-
   defp parse_status_filter("want_to_read"), do: :want_to_read
   defp parse_status_filter("in_progress"), do: :in_progress
   defp parse_status_filter("finished"), do: :finished
   defp parse_status_filter("abandoned"), do: :abandoned
   defp parse_status_filter(_status), do: :all
-
-  defp parse_difficulty_filter("all", _assigns), do: :all
-
-  defp parse_difficulty_filter(difficulty, assigns) do
-    Enum.find(assigns.difficulty_options, :all, fn option ->
-      normalized_difficulty(option) == normalized_difficulty(difficulty)
-    end)
-  end
-
-  defp difficulty_options(books) do
-    books
-    |> Enum.map(& &1.difficulty_label)
-    |> Enum.reject(&is_nil/1)
-    |> Enum.map(&String.trim/1)
-    |> Enum.reject(&(&1 == ""))
-    |> Enum.uniq_by(&normalized_difficulty/1)
-    |> Enum.sort_by(&normalized_difficulty/1)
-  end
-
-  defp normalized_difficulty(value),
-    do: value |> to_string() |> String.trim() |> String.downcase()
 
   defp update_book_status(book, "start"), do: Library.start_book(book)
   defp update_book_status(book, "finish"), do: Library.finish_book(book)
