@@ -87,18 +87,6 @@ defmodule CiBookTrackerWeb.SettingsLive do
           >
             <.icon name="hero-arrow-down-tray" class="size-5" /> Export Backup
           </.link>
-          <div class="mt-6 border-t border-rose-100 pt-6">
-            <p class="text-sm leading-6 text-slate-600">
-              Restore replaces every reading log, book, saved provider setting, and local cover.
-            </p>
-            <.link
-              id="settings-restore-database"
-              navigate={~p"/settings/restore"}
-              class="mt-4 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border border-rose-300 bg-rose-50 px-5 font-semibold text-rose-800 transition hover:-translate-y-0.5 hover:bg-rose-100 focus:outline-none focus:ring-2 focus:ring-rose-600 focus:ring-offset-2 active:translate-y-0"
-            >
-              <.icon name="hero-arrow-path" class="size-5" /> Restore Backup
-            </.link>
-          </div>
         </.settings_section>
 
         <.settings_section

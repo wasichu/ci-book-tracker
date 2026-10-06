@@ -17,7 +17,7 @@ defmodule CiBookTrackerWeb.SettingsLiveTest do
            )
 
     assert has_element?(view, "#settings-export-database[href='/backup/database']")
-    assert has_element?(view, "#settings-restore-database[href='/settings/restore']")
+    refute has_element?(view, "#settings-restore-database")
     assert has_element?(view, "#open-library-settings", "Enabled")
     assert has_element?(view, "#google-books-settings", "Optional API key")
     assert has_element?(view, "#hardcover-settings", "API token")

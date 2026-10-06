@@ -2,12 +2,15 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
   use CiBookTrackerWeb, :live_view
 
   alias CiBookTracker.DatabaseRestore
+  alias CiBookTracker.Library
+  alias CiBookTrackerWeb.ReadingLogSession
 
   @impl true
-  def mount(_params, _session, socket) do
+  def mount(_params, session, socket) do
     {:ok,
      socket
      |> assign(:page_title, "Restore backup")
+     |> assign(:show_export_warning, open_log_has_books?(session))
      |> assign(:staged_path, nil)
      |> assign(:uploaded_name, nil)
      |> assign(:validation_error, nil)
@@ -15,42 +18,14 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
      |> allow_upload(:database,
        accept: [".zip", ".db", ".sqlite", ".sqlite3"],
        max_entries: 1,
+       auto_upload: true,
+       progress: &handle_upload_progress/3,
        max_file_size: 250_000_000
      )}
   end
 
   @impl true
   def handle_event("validate_upload", _params, socket), do: {:noreply, socket}
-
-  def handle_event("validate_database", _params, socket) do
-    cleanup_staged_file(socket.assigns.staged_path)
-
-    results =
-      consume_uploaded_entries(socket, :database, fn %{path: path}, entry ->
-        {:ok, {entry.client_name, DatabaseRestore.stage(path)}}
-      end)
-
-    case results do
-      [{name, {:ok, staged_path}}] ->
-        {:noreply,
-         socket
-         |> assign(:staged_path, staged_path)
-         |> assign(:uploaded_name, name)
-         |> assign(:validation_error, nil)
-         |> assign(:restore_result, nil)}
-
-      [{_name, {:error, reason}}] ->
-        {:noreply,
-         socket
-         |> assign(:staged_path, nil)
-         |> assign(:uploaded_name, nil)
-         |> assign(:validation_error, DatabaseRestore.error_message(reason))
-         |> assign(:restore_result, nil)}
-
-      [] ->
-        {:noreply, assign(socket, :validation_error, "Choose a database file to validate.")}
-    end
-  end
 
   def handle_event("cancel_restore", _params, socket) do
     cleanup_staged_file(socket.assigns.staged_path)
@@ -112,11 +87,15 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
         </header>
 
         <section
-          :if={is_nil(@staged_path) && is_nil(@restore_result)}
+          :if={is_nil(@restore_result) && (is_nil(@staged_path) || !@show_export_warning)}
           id="restore-upload"
           class="rounded-[2rem] border border-rose-200 bg-white p-5 shadow-sm shadow-rose-100/60 sm:p-7"
         >
-          <div class="rounded-2xl bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+          <div
+            :if={@show_export_warning}
+            id="restore-export-warning"
+            class="rounded-2xl bg-amber-50 p-4 text-sm leading-6 text-amber-950"
+          >
             <p class="font-semibold">Export your current database before continuing.</p>
             <p class="mt-1">
               The app also creates an automatic safety backup immediately before restoring.
@@ -130,10 +109,10 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
           </div>
 
           <.form
+            :if={is_nil(@staged_path)}
             for={to_form(%{}, as: :restore)}
             id="database-restore-form"
             phx-change="validate_upload"
-            phx-submit="validate_database"
             class="mt-6 space-y-4"
           >
             <label
@@ -168,19 +147,40 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
               {@validation_error}
             </p>
 
-            <.button
-              type="submit"
-              id="validate-database"
-              phx-disable-with="Validating..."
-              class="flex min-h-12 w-full items-center justify-center rounded-xl bg-slate-950 px-5 font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-600 focus:ring-offset-2 sm:w-auto"
-            >
-              Validate backup
-            </.button>
+            <p class="text-sm text-slate-500" role="status">
+              Your backup uploads and validates automatically after selection.
+            </p>
           </.form>
+
+          <div :if={@staged_path} id="restore-ready" class="space-y-4">
+            <p class="font-semibold text-slate-900">Ready to restore</p>
+            <p class="break-all text-sm text-slate-600">{@uploaded_name}</p>
+            <p :if={@validation_error} class="text-sm font-medium text-rose-700">
+              {@validation_error}
+            </p>
+            <div class="flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                id="restore-backup-button"
+                phx-click="restore_database"
+                phx-disable-with="Restoring..."
+                class="min-h-12 rounded-xl bg-slate-950 px-5 font-semibold text-white transition hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+              >
+                Restore Backup
+              </button>
+              <button
+                type="button"
+                phx-click="cancel_restore"
+                class="min-h-12 rounded-xl border border-slate-300 px-5 font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+              >
+                Choose another file
+              </button>
+            </div>
+          </div>
         </section>
 
         <section
-          :if={@staged_path}
+          :if={@staged_path && @show_export_warning}
           id="restore-confirmation"
           class="rounded-[2rem] border-2 border-rose-300 bg-rose-50 p-5 shadow-sm shadow-rose-100 sm:p-7"
         >
@@ -251,7 +251,47 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
     """
   end
 
+  defp handle_upload_progress(:database, entry, socket) do
+    if entry.done? do
+      cleanup_staged_file(socket.assigns.staged_path)
+
+      result =
+        consume_uploaded_entry(socket, entry, fn %{path: path} ->
+          {:ok, DatabaseRestore.stage(path)}
+        end)
+
+      case result do
+        {:ok, staged_path} ->
+          {:noreply,
+           socket
+           |> assign(:staged_path, staged_path)
+           |> assign(:uploaded_name, entry.client_name)
+           |> assign(:validation_error, nil)
+           |> assign(:restore_result, nil)}
+
+        {:error, reason} ->
+          {:noreply,
+           socket
+           |> assign(:staged_path, nil)
+           |> assign(:uploaded_name, nil)
+           |> assign(:validation_error, DatabaseRestore.error_message(reason))}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
   defp cleanup_staged_file(staged), do: DatabaseRestore.cleanup_stage(staged)
+
+  defp open_log_has_books?(session) do
+    case ReadingLogSession.resolve(session) do
+      {:ok, reading_log} ->
+        Library.list_books!(query: [filter: [reading_log_id: reading_log.id], limit: 1]) != []
+
+      {:error, _reason} ->
+        false
+    end
+  end
 
   defp upload_error(:too_large), do: "The backup is larger than 250 MB."
   defp upload_error(:not_accepted), do: "Choose a .zip, .db, .sqlite, or .sqlite3 file."

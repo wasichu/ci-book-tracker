@@ -56,8 +56,26 @@ defmodule CiBookTrackerWeb.BackupLive do
 
           <p class="mt-4 text-xs leading-5 text-slate-500">
             Store the downloaded file somewhere separate from this device. You can restore it later
-            from Settings.
+            using Import / Restore Backup below.
           </p>
+        </section>
+        <section class="rounded-[2rem] border border-rose-200 bg-white p-5 shadow-sm sm:p-8">
+          <h2 class="text-xl font-semibold tracking-tight text-slate-950">Import a backup</h2>
+          <p class="mt-2 text-sm leading-6 text-slate-600">
+            Choose a previously exported ZIP backup to restore your reading logs, books, settings,
+            and cover art. Legacy SQLite backups are also supported.
+          </p>
+          <p class="mt-3 text-sm leading-6 text-rose-800">
+            Restoring replaces your current data. You can validate the file and review a confirmation
+            before anything changes.
+          </p>
+          <.link
+            id="import-backup"
+            navigate={~p"/settings/restore"}
+            class="mt-6 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border border-rose-300 bg-rose-50 px-5 font-semibold text-rose-800 transition hover:-translate-y-0.5 hover:bg-rose-100 focus:outline-none focus:ring-2 focus:ring-rose-600 focus:ring-offset-2"
+          >
+            <.icon name="hero-arrow-up-tray" class="size-5" /> Import / Restore Backup
+          </.link>
         </section>
       </section>
     </Layouts.app>

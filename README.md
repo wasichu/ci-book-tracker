@@ -191,6 +191,12 @@ standalone `.db`, `.sqlite`, and `.sqlite3` exports. A full restore replaces
 the database and, for ZIP backups, the local covers. It also creates a
 timestamped safety ZIP first.
 
+To import a backup, open **Restore from Backup** on the front page (or **Import / Restore
+Backup** on `/backup`) and select your backup file. It uploads and validates automatically.
+Click **Restore Backup** to apply it. If the open log contains books, review the
+replacement confirmation first. Restart
+CI Book Tracker after the restore completes.
+
 After pulling a version that adds a database migration, apply it before
 starting the server:
 

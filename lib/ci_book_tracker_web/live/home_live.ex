@@ -48,14 +48,23 @@ defmodule CiBookTrackerWeb.HomeLive do
               Start tracking extensive reading in another language and optionally set a word goal.
             </p>
           </header>
-          <.button
-            id="create-reading-log"
-            navigate={~p"/reading-logs/new"}
-            variant="primary"
-            class="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-amber-700 px-5 text-sm font-semibold text-white shadow-sm shadow-amber-900/15 transition hover:-translate-y-0.5 hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0 sm:w-auto"
-          >
-            <.icon name="hero-plus" class="size-4" /> Create New Reading Log
-          </.button>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <.button
+              id="create-reading-log"
+              navigate={~p"/reading-logs/new"}
+              variant="primary"
+              class="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-amber-700 px-5 text-sm font-semibold text-white shadow-sm shadow-amber-900/15 transition hover:-translate-y-0.5 hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0 sm:w-auto"
+            >
+              <.icon name="hero-plus" class="size-4" /> Create New Reading Log
+            </.button>
+            <.link
+              id="restore-backup"
+              navigate={~p"/settings/restore"}
+              class="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0 sm:w-auto"
+            >
+              <.icon name="hero-arrow-up-tray" class="size-4" /> Restore from Backup
+            </.link>
+          </div>
         </section>
 
         <section id="existing-reading-logs" class="space-y-4">
