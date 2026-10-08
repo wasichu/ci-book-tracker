@@ -36,4 +36,7 @@ jobs:
         with:
           version-file: .tool-versions
           version-type: strict
+      # Jobs have isolated workspaces. Fetch the locked dependencies before Mix
+      # loads the project's configured listeners and runs the audit.
+      - run: mix deps.get --check-locked
       - run: mix hex.audit
