@@ -3,6 +3,7 @@ defmodule CiBookTracker.DatabaseRestore do
 
   alias CiBookTracker.{AppData, BackupArchive, DatabaseBackup, DatabaseValidation}
   alias CiBookTracker.BackupArchive.StagedBackup
+  alias CiBookTracker.DatabaseRestore.Migration
 
   @type validation_error ::
           :not_readable
@@ -13,6 +14,7 @@ defmodule CiBookTracker.DatabaseRestore do
           | :integrity_check_failed
           | {:missing_tables, [String.t()]}
           | :incompatible_migrations
+          | :migration_failed
 
   @spec validate(String.t()) :: :ok | {:error, validation_error()}
   defdelegate validate(path), to: DatabaseValidation
@@ -20,9 +22,10 @@ defmodule CiBookTracker.DatabaseRestore do
   @spec stage(String.t()) ::
           {:ok, String.t() | StagedBackup.t()} | {:error, validation_error() | term()}
   def stage(source_path) do
-    case validate(source_path) do
+    case DatabaseValidation.validate(source_path, allow_older?: true) do
       :ok -> stage_database(source_path)
-      {:error, _database_error} -> BackupArchive.stage(source_path, &validate/1)
+      {:error, :not_sqlite} -> BackupArchive.stage(source_path, &Migration.prepare/1)
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -37,6 +40,8 @@ defmodule CiBookTracker.DatabaseRestore do
 
     now = Keyword.get(opts, :now, DateTime.utc_now())
     manage_repo? = Keyword.get(opts, :manage_repo?, target_path == DatabaseBackup.database_path())
+    runtime = Keyword.get(opts, :runtime, CiBookTracker.DatabaseRestore.Runtime)
+    file_system = Keyword.get(opts, :file_system, File)
 
     %{database_path: staged_path, cover_directory: staged_covers} =
       staged_backup_paths(staged_backup)
@@ -44,15 +49,15 @@ defmodule CiBookTracker.DatabaseRestore do
     with :ok <- validate(staged_path),
          :ok <- File.mkdir_p(backup_directory),
          {:ok, replacement_path} <- copy_replacement(staged_path, target_path) do
-      perform_restore(
-        replacement_path,
-        staged_covers,
-        target_path,
-        target_cover_directory,
-        backup_directory,
-        now,
-        manage_repo?
-      )
+      perform_restore(replacement_path, staged_covers, %{
+        target_path: target_path,
+        cover_directory: target_cover_directory,
+        backup_directory: backup_directory,
+        now: now,
+        manage_repo?: manage_repo?,
+        runtime: runtime,
+        file_system: file_system
+      })
     end
   end
 
@@ -80,8 +85,22 @@ defmodule CiBookTracker.DatabaseRestore do
   def error_message({:missing_tables, tables}),
     do: "The database is missing required tables: #{Enum.join(tables, ", ")}."
 
+  def error_message(:migration_failed),
+    do: "This older backup could not be upgraded. Your backup and current data have not changed."
+
   def error_message(:incompatible_migrations),
     do: "The database schema is not compatible with this version of CI Book Tracker."
+
+  def error_message({:repo_restart_failed, {:ok, %{backup_path: path}}, _reason}),
+    do:
+      "Your backup was restored, but the database could not restart. Please restart CI Book Tracker. Safety backup: #{path}"
+
+  def error_message({:repo_restart_failed, {:error, reason}, _restart_reason}),
+    do: "#{error_message(reason)} The database could not restart. Please restart CI Book Tracker."
+
+  def error_message({:rollback_failed, _reason, _rollback_reason, path}),
+    do:
+      "Restore failed and automatic recovery could not finish. Your previous data is preserved at: #{path}. Restart only after recovering this file."
 
   def error_message(_reason), do: "The database could not be restored."
 
@@ -98,7 +117,15 @@ defmodule CiBookTracker.DatabaseRestore do
     case File.cp(source_path, staged_path) do
       :ok ->
         File.chmod(staged_path, 0o600)
-        {:ok, staged_path}
+
+        case Migration.prepare(staged_path) do
+          :ok ->
+            {:ok, staged_path}
+
+          {:error, reason} ->
+            cleanup_stage(staged_path)
+            {:error, reason}
+        end
 
       {:error, reason} ->
         {:error, reason}
@@ -140,60 +167,65 @@ defmodule CiBookTracker.DatabaseRestore do
     end
   end
 
-  defp perform_restore(
-         replacement_path,
-         staged_covers,
-         target_path,
-         target_cover_directory,
-         backup_directory,
-         now,
-         manage_repo?
-       ) do
-    case prepare_repo(manage_repo?) do
-      {:ok, repo_stopped?} ->
-        try do
-          backup_path = Path.join(backup_directory, safety_backup_filename(now))
+  defp perform_restore(replacement_path, staged_covers, context) do
+    %{manage_repo?: manage_repo?, runtime: runtime} = context
 
-          with :ok <-
-                 backup_current_data(target_path, target_cover_directory, backup_path),
-               {:ok, displaced_database} <- swap_database(replacement_path, target_path) do
-            case replace_cover_directory(staged_covers, target_cover_directory) do
-              :ok ->
-                File.rm(displaced_database)
-                remove_sidecars(target_path)
-                {:ok, %{backup_path: backup_path}}
-
-              {:error, reason} ->
-                rollback_database(displaced_database, target_path)
-                {:error, reason}
+    try do
+      case runtime.prepare(manage_repo?) do
+        {:ok, repo_stopped?} ->
+          result =
+            try do
+              replace_data(replacement_path, staged_covers, context)
+            rescue
+              error -> {:error, {:restore_exception, Exception.message(error)}}
             end
-          end
-        after
-          File.rm(replacement_path)
-          if repo_stopped?, do: restart_repo()
-        end
 
-      {:error, reason} ->
-        File.rm(replacement_path)
-        {:error, reason}
+          restart? = repo_stopped? && !recovery_failed?(result)
+
+          case if(restart?, do: runtime.restart(), else: :ok) do
+            :ok -> result
+            {:error, reason} -> {:error, {:repo_restart_failed, result, reason}}
+          end
+
+        {:error, reason} ->
+          {:error, reason}
+      end
+    after
+      File.rm(replacement_path)
     end
   end
 
-  defp prepare_repo(false), do: {:ok, false}
+  defp recovery_failed?({:error, {:rollback_failed, _, _, _}}), do: true
+  defp recovery_failed?(_result), do: false
 
-  defp prepare_repo(true) do
-    if Process.whereis(CiBookTracker.Repo) do
-      with {:ok, _result} <-
-             Ecto.Adapters.SQL.query(
-               CiBookTracker.Repo,
-               "PRAGMA wal_checkpoint(TRUNCATE)",
-               []
-             ),
-           :ok <- Supervisor.terminate_child(CiBookTracker.Supervisor, CiBookTracker.Repo) do
-        {:ok, true}
+  defp replace_data(replacement_path, staged_covers, context) do
+    %{
+      target_path: target_path,
+      cover_directory: target_cover_directory,
+      backup_directory: backup_directory,
+      now: now,
+      file_system: file_system
+    } = context
+
+    backup_path = Path.join(backup_directory, safety_backup_filename(now))
+
+    with :ok <- backup_current_data(target_path, target_cover_directory, backup_path),
+         {:ok, displaced} <- swap_database(replacement_path, target_path, file_system) do
+      case replace_cover_directory(staged_covers, target_cover_directory, file_system) do
+        :ok ->
+          File.rm(displaced)
+          remove_sidecars(target_path)
+          {:ok, %{backup_path: backup_path}}
+
+        {:error, reason} ->
+          case file_system.rename(displaced, target_path) do
+            :ok ->
+              {:error, reason}
+
+            {:error, rollback_reason} ->
+              {:error, {:rollback_failed, reason, rollback_reason, displaced}}
+          end
       end
-    else
-      {:ok, false}
     end
   end
 
@@ -209,24 +241,33 @@ defmodule CiBookTracker.DatabaseRestore do
     end
   end
 
-  defp replace_cover_directory(nil, _target_directory), do: :ok
+  defp replace_cover_directory(nil, _target_directory, _file_system), do: :ok
 
-  defp replace_cover_directory(source_directory, target_directory) do
+  defp replace_cover_directory(source_directory, target_directory, file_system) do
     suffix = System.unique_integer([:positive, :monotonic])
     replacement_directory = "#{target_directory}.restore_#{suffix}"
     displaced_directory = "#{target_directory}.pre_restore_#{suffix}"
 
     with {:ok, _files} <- File.cp_r(source_directory, replacement_directory),
-         :ok <- displace_cover_directory(target_directory, displaced_directory) do
-      case File.rename(replacement_directory, target_directory) do
+         :ok <- displace_cover_directory(target_directory, displaced_directory, file_system) do
+      case file_system.rename(replacement_directory, target_directory) do
         :ok ->
           File.rm_rf(displaced_directory)
           :ok
 
         {:error, reason} ->
-          restore_displaced_cover_directory(target_directory, displaced_directory)
+          rollback =
+            restore_displaced_cover_directory(target_directory, displaced_directory, file_system)
+
           File.rm_rf(replacement_directory)
-          {:error, reason}
+
+          case rollback do
+            :ok ->
+              {:error, reason}
+
+            {:error, rollback_reason} ->
+              {:error, {:rollback_failed, reason, rollback_reason, displaced_directory}}
+          end
       end
     else
       {:error, reason, _file} ->
@@ -239,46 +280,37 @@ defmodule CiBookTracker.DatabaseRestore do
     end
   end
 
-  defp displace_cover_directory(target_directory, displaced_directory) do
+  defp displace_cover_directory(target_directory, displaced_directory, file_system) do
     if File.dir?(target_directory) do
-      File.rename(target_directory, displaced_directory)
+      file_system.rename(target_directory, displaced_directory)
     else
       :ok
     end
   end
 
-  defp restore_displaced_cover_directory(target_directory, displaced_directory) do
-    if File.dir?(displaced_directory), do: File.rename(displaced_directory, target_directory)
-    :ok
+  defp restore_displaced_cover_directory(target_directory, displaced_directory, file_system) do
+    if File.dir?(displaced_directory),
+      do: file_system.rename(displaced_directory, target_directory),
+      else: :ok
   end
 
-  defp swap_database(replacement_path, target_path) do
-    displaced_path =
-      "#{target_path}.pre_restore_#{System.unique_integer([:positive, :monotonic])}"
+  defp swap_database(replacement_path, target_path, file_system) do
+    displaced = "#{target_path}.pre_restore_#{System.unique_integer([:positive, :monotonic])}"
 
-    with :ok <- File.rename(target_path, displaced_path) do
-      case File.rename(replacement_path, target_path) do
+    with :ok <- file_system.rename(target_path, displaced) do
+      case file_system.rename(replacement_path, target_path) do
         :ok ->
-          {:ok, displaced_path}
+          {:ok, displaced}
 
         {:error, reason} ->
-          File.rename(displaced_path, target_path)
-          {:error, reason}
+          case file_system.rename(displaced, target_path) do
+            :ok ->
+              {:error, reason}
+
+            {:error, rollback_reason} ->
+              {:error, {:rollback_failed, reason, rollback_reason, displaced}}
+          end
       end
-    end
-  end
-
-  defp rollback_database(displaced_path, target_path) do
-    File.rm(target_path)
-    File.rename(displaced_path, target_path)
-  end
-
-  defp restart_repo do
-    case Supervisor.restart_child(CiBookTracker.Supervisor, CiBookTracker.Repo) do
-      {:ok, _pid} -> :ok
-      {:ok, _pid, _info} -> :ok
-      {:error, :running} -> :ok
-      {:error, reason} -> {:error, reason}
     end
   end
 

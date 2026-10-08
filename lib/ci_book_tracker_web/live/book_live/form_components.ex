@@ -64,13 +64,17 @@ defmodule CiBookTrackerWeb.BookLive.FormComponents do
           phx-disable-with="Searching..."
           class="mt-1 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 font-semibold text-white transition hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 sm:w-auto"
         >
-          <.icon name="hero-magnifying-glass" class="size-5" /> Search
+          <.icon
+            name={if @status == :loading, do: "hero-arrow-path", else: "hero-magnifying-glass"}
+            class={if @status == :loading, do: "size-5 motion-safe:animate-spin", else: "size-5"}
+          /> {if @status == :loading, do: "Search again", else: "Search"}
         </.button>
       </.form>
 
       <p
         :if={@message}
         id="metadata-message"
+        role="status"
         class={[
           "mt-4 rounded-xl px-4 py-3 text-sm leading-6",
           @status == :error && "bg-red-50 text-red-800",

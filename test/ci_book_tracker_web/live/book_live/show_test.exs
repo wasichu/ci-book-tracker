@@ -107,6 +107,8 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
     )
     |> render_submit()
 
+    render_async(view)
+
     view
     |> element("button[phx-click='select_metadata']")
     |> render_click()
@@ -192,6 +194,8 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
       metadata: %{provider: "open_library", query: "My Saved Title"}
     )
     |> render_submit()
+
+    render_async(view)
 
     view
     |> element("button[phx-click='select_cover']")

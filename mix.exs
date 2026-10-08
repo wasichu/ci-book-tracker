@@ -5,7 +5,7 @@ defmodule CiBookTracker.MixProject do
     [
       app: :ci_book_tracker,
       version: "0.1.0",
-      elixir: "~> 1.15",
+      elixir: "~> 1.20.4",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
@@ -29,7 +29,7 @@ defmodule CiBookTracker.MixProject do
 
   def cli do
     [
-      preferred_envs: [precommit: :test]
+      preferred_envs: [precommit: :test, ci: :test]
     ]
   end
 
@@ -56,7 +56,7 @@ defmodule CiBookTracker.MixProject do
       {:phoenix, "~> 1.8.1"},
       {:phoenix_html, "~> 4.1"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
-      {:phoenix_live_view, "~> 1.1.0"},
+      {:phoenix_live_view, "~> 1.2.0"},
       {:lazy_html, ">= 0.1.0", only: :test},
       {:phoenix_live_dashboard, "~> 0.8.3"},
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
@@ -95,6 +95,7 @@ defmodule CiBookTracker.MixProject do
         "phx.digest"
       ],
       precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"],
+      ci: ["format --check-formatted", "compile --warnings-as-errors", "test", "assets.build"],
       test: ["ash.setup --quiet", "test"]
     ]
   end

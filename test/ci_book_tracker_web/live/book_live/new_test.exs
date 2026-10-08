@@ -46,6 +46,48 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     assert has_element?(view, "#save-book", "Save Book")
   end
 
+  test "keeps the form responsive and discards a superseded metadata search", %{conn: conn} do
+    {conn, _reading_log} = create_reading_log(conn)
+    {:ok, view, _html} = live(conn, ~p"/books/new")
+    owner = self()
+    Req.Test.allow(GoogleBooks, self(), view.pid)
+
+    Req.Test.stub(GoogleBooks, fn conn ->
+      send(owner, {:search_started, self()})
+
+      receive do
+        {:respond, title} ->
+          Req.Test.json(conn, %{
+            "items" => [%{"id" => title, "volumeInfo" => %{"title" => title}}]
+          })
+      after
+        2000 -> raise "Test search was not released"
+      end
+    end)
+
+    view
+    |> form("#metadata-search-form", metadata: %{provider: "google_books", query: "first"})
+    |> render_submit()
+
+    assert_receive {:search_started, first_task}
+    monitor = Process.monitor(first_task)
+    assert has_element?(view, "#metadata-message", "Searching for books")
+    view |> form("#add-book-form", book: %{title: "Manual entry"}) |> render_change()
+    assert has_element?(view, "#book_title[value='Manual entry']")
+
+    view
+    |> form("#metadata-search-form", metadata: %{provider: "google_books", query: "second"})
+    |> render_submit()
+
+    assert_receive {:DOWN, ^monitor, :process, ^first_task, _reason}
+    assert_receive {:search_started, second_task}
+    send(second_task, {:respond, "Latest result"})
+    render_async(view)
+
+    assert has_element?(view, "#metadata-results", "Latest result")
+    assert has_element?(view, "#book_title[value='Manual entry']")
+  end
+
   test "searches Google Books and prefills normalized metadata", %{conn: conn} do
     {conn, _reading_log} = create_reading_log(conn)
     {:ok, view, _html} = live(conn, ~p"/books/new")
@@ -75,6 +117,8 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
       metadata: %{provider: "google_books", query: "short stories"}
     )
     |> render_submit()
+
+    render_async(view)
 
     assert has_element?(view, "#metadata-results", "Short Stories in Spanish")
     assert has_element?(view, "#metadata-results", "Google Books")
@@ -130,6 +174,8 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     |> form("#metadata-search-form", metadata: %{query: "solitude"})
     |> render_submit()
 
+    render_async(view)
+
     assert has_element?(view, "#metadata-results", "Cien anos de soledad")
     assert has_element?(view, "#metadata-results", "417 pages")
     assert has_element?(view, "#book_title[value='']")
@@ -180,6 +226,8 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     view
     |> form("#metadata-search-form", metadata: %{query: "solitude"})
     |> render_submit()
+
+    render_async(view)
 
     view
     |> element("button[phx-click='select_metadata']")
@@ -299,6 +347,8 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     |> form("#metadata-search-form", metadata: %{query: "provider title"})
     |> render_submit()
 
+    render_async(view)
+
     assert has_element?(view, "button[phx-click='select_cover']", "Use cover only")
 
     view
@@ -325,6 +375,8 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     |> form("#metadata-search-form", metadata: %{query: "solitude"})
     |> render_submit()
 
+    render_async(view)
+
     assert has_element?(view, "#metadata-message", "unavailable right now")
     assert has_element?(view, "#add-book-form")
   end
@@ -346,6 +398,8 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
       metadata: %{provider: "google_books", query: "The Little Prince"}
     )
     |> render_submit()
+
+    render_async(view)
 
     assert has_element?(view, "#metadata-message", "Configure GOOGLE_BOOKS_API_KEY")
     assert has_element?(view, "#add-book-form")

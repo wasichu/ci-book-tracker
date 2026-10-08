@@ -110,6 +110,8 @@ defmodule CiBookTrackerWeb.BookLive.Form do
     provider = metadata_provider(metadata_params["provider"])
     query = String.trim(query)
 
+    socket = cancel_async(socket, :metadata_search)
+
     if query == "" do
       {:noreply,
        socket
@@ -119,34 +121,19 @@ defmodule CiBookTrackerWeb.BookLive.Form do
        |> assign(:metadata_status, :error)
        |> assign(:metadata_message, "Enter a title, author, ISBN, or keyword to search.")}
     else
-      case BookMetadata.lookup_book(query,
-             language_code: socket.assigns.reading_log.language_code,
-             provider: provider
-           ) do
-        {:ok, search} ->
-          message =
-            search.message ||
-              if(search.results == [], do: "No matching books found. Try a broader search.")
+      language_code = socket.assigns.reading_log.language_code
 
-          {:noreply,
-           socket
-           |> assign(:metadata_provider, Atom.to_string(provider))
-           |> assign(:metadata_query, query)
-           |> assign(:metadata_results, search.results)
-           |> assign(:metadata_status, search.status)
-           |> assign(:metadata_message, message)
-           |> assign(:selected_cover_result_id, nil)}
-
-        {:error, reason} ->
-          {:noreply,
-           socket
-           |> assign(:metadata_provider, Atom.to_string(provider))
-           |> assign(:metadata_query, query)
-           |> assign(:metadata_results, [])
-           |> assign(:metadata_status, :error)
-           |> assign(:metadata_message, metadata_error_message(reason))
-           |> assign(:selected_cover_result_id, nil)}
-      end
+      {:noreply,
+       socket
+       |> assign(:metadata_provider, Atom.to_string(provider))
+       |> assign(:metadata_query, query)
+       |> assign(:metadata_results, [])
+       |> assign(:metadata_status, :loading)
+       |> assign(:metadata_message, "Searching for books...")
+       |> assign(:selected_cover_result_id, nil)
+       |> start_async(:metadata_search, fn ->
+         BookMetadata.lookup_book(query, language_code: language_code, provider: provider)
+       end)}
     end
   end
 
@@ -227,6 +214,38 @@ defmodule CiBookTrackerWeb.BookLive.Form do
      |> assign(:selected_cover_result_id, nil)
      |> assign(:metadata_status, :idle)
      |> assign(:metadata_message, nil)}
+  end
+
+  @impl true
+  def handle_async(:metadata_search, {:ok, {:ok, search}}, socket) do
+    message =
+      search.message ||
+        if(search.results == [], do: "No matching books found. Try a broader search.")
+
+    {:noreply,
+     socket
+     |> assign(:metadata_results, search.results)
+     |> assign(:metadata_status, search.status)
+     |> assign(:metadata_message, message)}
+  end
+
+  def handle_async(:metadata_search, {:ok, {:error, reason}}, socket) do
+    {:noreply,
+     socket
+     |> assign(:metadata_results, [])
+     |> assign(:metadata_status, :error)
+     |> assign(:metadata_message, metadata_error_message(reason))}
+  end
+
+  def handle_async(:metadata_search, {:exit, {:shutdown, :cancel}}, socket),
+    do: {:noreply, socket}
+
+  def handle_async(:metadata_search, {:exit, _reason}, socket) do
+    {:noreply,
+     socket
+     |> assign(:metadata_results, [])
+     |> assign(:metadata_status, :error)
+     |> assign(:metadata_message, "The metadata search could not be completed. Please try again.")}
   end
 
   @impl true

@@ -3,18 +3,15 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
 
   alias CiBookTracker.DatabaseRestore
   alias CiBookTracker.Library
-  alias CiBookTrackerWeb.ReadingLogSession
+  alias CiBookTrackerWeb.{ReadingLogSession, RestoreState}
 
   @impl true
   def mount(_params, session, socket) do
     {:ok,
      socket
      |> assign(:page_title, "Restore backup")
-     |> assign(:show_export_warning, open_log_has_books?(session))
-     |> assign(:staged_path, nil)
-     |> assign(:uploaded_name, nil)
-     |> assign(:validation_error, nil)
-     |> assign(:restore_result, nil)
+     |> assign(:requires_confirmation?, open_log_has_books?(session))
+     |> assign(:restore, %RestoreState{})
      |> allow_upload(:database,
        accept: [".zip", ".db", ".sqlite", ".sqlite3"],
        max_entries: 1,
@@ -28,38 +25,55 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
   def handle_event("validate_upload", _params, socket), do: {:noreply, socket}
 
   def handle_event("cancel_restore", _params, socket) do
-    cleanup_staged_file(socket.assigns.staged_path)
-
-    {:noreply,
-     socket
-     |> assign(:staged_path, nil)
-     |> assign(:uploaded_name, nil)
-     |> assign(:validation_error, nil)}
+    cleanup_staged_file(socket.assigns.restore.staged)
+    {:noreply, assign(socket, :restore, %RestoreState{})}
   end
 
-  def handle_event("restore_database", _params, %{assigns: %{staged_path: staged}} = socket)
-      when not is_nil(staged) do
+  def handle_event(
+        "restore_database",
+        _params,
+        %{assigns: %{restore: %{phase: :ready, staged: staged}}} = socket
+      ) do
     case DatabaseRestore.restore(staged) do
       {:ok, result} ->
         cleanup_staged_file(staged)
-
-        {:noreply,
-         socket
-         |> assign(:staged_path, nil)
-         |> assign(:uploaded_name, nil)
-         |> assign(:restore_result, result)
-         |> assign(:validation_error, nil)}
+        {:noreply, assign(socket, :restore, RestoreState.complete(result))}
 
       {:error, reason} ->
-        {:noreply, assign(socket, :validation_error, DatabaseRestore.error_message(reason))}
+        {:noreply,
+         update(socket, :restore, &RestoreState.fail(&1, DatabaseRestore.error_message(reason)))}
     end
   end
 
   def handle_event("restore_database", _params, socket), do: {:noreply, socket}
 
   @impl true
+  def handle_async(:validate_backup, {:ok, {:ok, staged}}, socket) do
+    {:noreply,
+     assign(socket, :restore, RestoreState.ready(staged, socket.assigns.restore.filename))}
+  end
+
+  def handle_async(:validate_backup, {:ok, {:error, reason}}, socket) do
+    {:noreply,
+     assign(
+       socket,
+       :restore,
+       RestoreState.fail(%RestoreState{}, DatabaseRestore.error_message(reason))
+     )}
+  end
+
+  def handle_async(:validate_backup, {:exit, _reason}, socket) do
+    {:noreply,
+     assign(
+       socket,
+       :restore,
+       RestoreState.fail(%RestoreState{}, "The backup could not be checked. Please try again.")
+     )}
+  end
+
+  @impl true
   def terminate(_reason, socket) do
-    cleanup_staged_file(socket.assigns[:staged_path])
+    cleanup_staged_file(socket.assigns.restore.staged)
     :ok
   end
 
@@ -70,10 +84,10 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
       <section id="database-restore-page" class="space-y-7">
         <header>
           <.link
-            navigate={~p"/settings"}
+            navigate={~p"/"}
             class="inline-flex min-h-11 items-center gap-2 rounded-xl pr-3 text-sm font-semibold text-slate-600 transition hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
           >
-            <.icon name="hero-arrow-left" class="size-4" /> Back to settings
+            <.icon name="hero-arrow-left" class="size-4" /> Back to reading logs
           </.link>
           <p class="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-rose-700">
             Destructive action
@@ -87,12 +101,12 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
         </header>
 
         <section
-          :if={is_nil(@restore_result) && (is_nil(@staged_path) || !@show_export_warning)}
+          :if={@restore.phase != :complete && (@restore.phase != :ready || !@requires_confirmation?)}
           id="restore-upload"
           class="rounded-[2rem] border border-rose-200 bg-white p-5 shadow-sm shadow-rose-100/60 sm:p-7"
         >
           <div
-            :if={@show_export_warning}
+            :if={@requires_confirmation?}
             id="restore-export-warning"
             class="rounded-2xl bg-amber-50 p-4 text-sm leading-6 text-amber-950"
           >
@@ -109,7 +123,7 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
           </div>
 
           <.form
-            :if={is_nil(@staged_path)}
+            :if={@restore.phase == :uploading}
             for={to_form(%{}, as: :restore)}
             id="database-restore-form"
             phx-change="validate_upload"
@@ -143,8 +157,8 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
               </p>
             </div>
 
-            <p :if={@validation_error} class="text-sm font-medium text-rose-700">
-              {@validation_error}
+            <p :if={@restore.error} class="text-sm font-medium text-rose-700">
+              {@restore.error}
             </p>
 
             <p class="text-sm text-slate-500" role="status">
@@ -152,11 +166,21 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
             </p>
           </.form>
 
-          <div :if={@staged_path} id="restore-ready" class="space-y-4">
+          <div
+            :if={@restore.phase == :validating}
+            id="restore-validating"
+            role="status"
+            class="flex items-center gap-3 py-6 text-slate-600"
+          >
+            <.icon name="hero-arrow-path" class="size-5 motion-safe:animate-spin" />
+            <p>Checking your backup...</p>
+          </div>
+
+          <div :if={@restore.phase == :ready} id="restore-ready" class="space-y-4">
             <p class="font-semibold text-slate-900">Ready to restore</p>
-            <p class="break-all text-sm text-slate-600">{@uploaded_name}</p>
-            <p :if={@validation_error} class="text-sm font-medium text-rose-700">
-              {@validation_error}
+            <p class="break-all text-sm text-slate-600">{@restore.filename}</p>
+            <p :if={@restore.error} class="text-sm font-medium text-rose-700">
+              {@restore.error}
             </p>
             <div class="flex flex-col gap-3 sm:flex-row">
               <button
@@ -180,7 +204,7 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
         </section>
 
         <section
-          :if={@staged_path && @show_export_warning}
+          :if={@restore.phase == :ready && @requires_confirmation?}
           id="restore-confirmation"
           class="rounded-[2rem] border-2 border-rose-300 bg-rose-50 p-5 shadow-sm shadow-rose-100 sm:p-7"
         >
@@ -193,7 +217,7 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
                 Backup validated
               </p>
               <h2 class="mt-1 text-xl font-semibold text-rose-950">Confirm full replacement</h2>
-              <p class="mt-2 break-all text-sm font-medium text-rose-900">{@uploaded_name}</p>
+              <p class="mt-2 break-all text-sm font-medium text-rose-900">{@restore.filename}</p>
             </div>
           </div>
 
@@ -205,8 +229,8 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
             This is a full database replacement. Data from the two databases will not be merged.
           </p>
 
-          <p :if={@validation_error} class="mt-4 text-sm font-medium text-rose-800">
-            {@validation_error}
+          <p :if={@restore.error} class="mt-4 text-sm font-medium text-rose-800">
+            {@restore.error}
           </p>
 
           <div class="mt-6 grid gap-3 sm:grid-cols-2">
@@ -231,7 +255,7 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
         </section>
 
         <section
-          :if={@restore_result}
+          :if={@restore.phase == :complete}
           id="restore-complete"
           class="rounded-[2rem] border border-emerald-200 bg-emerald-50 p-5 sm:p-7"
         >
@@ -243,7 +267,7 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
             Restore complete. Please restart CI Book Tracker.
           </p>
           <p class="mt-3 break-all text-sm leading-6 text-emerald-800">
-            Safety backup: {@restore_result.backup_path}
+            Safety backup: {@restore.result.backup_path}
           </p>
         </section>
       </section>
@@ -253,28 +277,40 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
 
   defp handle_upload_progress(:database, entry, socket) do
     if entry.done? do
-      cleanup_staged_file(socket.assigns.staged_path)
-
-      result =
+      source =
         consume_uploaded_entry(socket, entry, fn %{path: path} ->
-          {:ok, DatabaseRestore.stage(path)}
+          temporary =
+            Path.join(
+              System.tmp_dir!(),
+              "ci_backup_upload_#{System.unique_integer([:positive, :monotonic])}"
+            )
+
+          case File.cp(path, temporary) do
+            :ok -> {:ok, {:ok, temporary}}
+            {:error, reason} -> {:ok, {:error, reason}}
+          end
         end)
 
-      case result do
-        {:ok, staged_path} ->
+      case source do
+        {:ok, path} ->
           {:noreply,
            socket
-           |> assign(:staged_path, staged_path)
-           |> assign(:uploaded_name, entry.client_name)
-           |> assign(:validation_error, nil)
-           |> assign(:restore_result, nil)}
+           |> assign(:restore, RestoreState.validating(entry.client_name))
+           |> start_async(:validate_backup, fn ->
+             try do
+               DatabaseRestore.stage(path)
+             after
+               File.rm(path)
+             end
+           end)}
 
         {:error, reason} ->
           {:noreply,
-           socket
-           |> assign(:staged_path, nil)
-           |> assign(:uploaded_name, nil)
-           |> assign(:validation_error, DatabaseRestore.error_message(reason))}
+           assign(
+             socket,
+             :restore,
+             RestoreState.fail(%RestoreState{}, DatabaseRestore.error_message(reason))
+           )}
       end
     else
       {:noreply, socket}

@@ -70,6 +70,7 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLiveTest do
       ])
 
     render_upload(upload, "fake.sqlite3")
+    render_async(view)
 
     assert has_element?(view, "#restore-upload", "not a readable SQLite database")
     refute has_element?(view, "#restore-confirmation")
@@ -89,6 +90,7 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLiveTest do
       ])
 
     render_upload(upload, "backup.zip")
+    render_async(view)
 
     refute has_element?(view, "#restore-confirmation")
     refute has_element?(view, "#validate-database")
@@ -121,6 +123,7 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLiveTest do
       ])
 
     render_upload(upload, "backup.zip")
+    render_async(view)
 
     assert has_element?(view, "#restore-confirmation", "Backup validated")
 

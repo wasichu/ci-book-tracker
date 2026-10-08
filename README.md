@@ -118,9 +118,9 @@ original project philosophy.
 
 Requirements:
 
-- Elixir 1.15 or later
-- Erlang/OTP supported by the installed Elixir version
-- Phoenix 1.8
+- Elixir 1.20.4 or a later 1.20 patch
+- Erlang/OTP 29 (the tested versions are pinned in `.tool-versions`)
+- Phoenix 1.8 and LiveView 1.2
 - SQLite development support required by `exqlite`
 - Standard build tools for compiling dependencies
 
@@ -159,6 +159,10 @@ Run the complete project check before committing:
 mix precommit
 ```
 
+GitHub Actions runs `mix ci` to check formatting without rewriting files,
+compile with warnings treated as errors, run tests, and build assets using the
+pinned toolchain. A separate job runs `mix hex.audit` for dependency advisories.
+
 For a maintainer-oriented overview of the domain, LiveViews, persistence,
 metadata normalization, backup workflows, and final refactor decisions, see
 [`docs/architecture.md`](docs/architecture.md).
@@ -196,6 +200,11 @@ Backup** on `/backup`) and select your backup file. It uploads and validates aut
 Click **Restore Backup** to apply it. If the open log contains books, review the
 replacement confirmation first. Restart
 CI Book Tracker after the restore completes.
+
+Backups from earlier known migration versions are upgraded in a temporary copy
+before restoration. The original backup and live database stay unchanged during
+validation. Backups from newer versions or with incomplete migration histories
+are rejected. Failed upgrades never replace current data.
 
 After pulling a version that adds a database migration, apply it before
 starting the server:

@@ -189,12 +189,18 @@ Several focused modules handle workflows outside the two main resources:
   archive creation to `BackupArchive`.
 - `CiBookTracker.DatabaseValidation` checks SQLite integrity, required tables,
   and migration compatibility.
+- `CiBookTracker.DatabaseRestore.Migration` upgrades older backups using a private
+  temporary repository with a single SQLite connection. Only a complete prefix
+  of the application's migration history is accepted for upgrades.
+- `CiBookTracker.DatabaseRestore.Runtime` owns repository shutdown and restart.
 - `CiBookTracker.DatabaseRestore` stages ZIP or legacy SQLite backups, creates
   a complete safety archive, and safely replaces the active data.
 - `CiBookTrackerWeb.BookLive.FormParams` owns deterministic book-form
   normalization and metadata transformations.
 - `CiBookTrackerWeb.BookLive.FormComponents` contains the stateless metadata,
   cover, and book-field presentation used by the add/edit LiveView.
+- `CiBookTrackerWeb.RestoreState` represents the upload, validation, ready, and
+  complete phases of restoration independently of confirmation requirements.
 - `CiBookTrackerWeb.ReadingLogFormat` formats language names and reading goals.
 - `CiBookTrackerWeb.BookFormat` consistently formats book statuses, numbers,
   word totals, dates, and status messages.
@@ -205,6 +211,8 @@ Several focused modules handle workflows outside the two main resources:
 
 1. The LiveView loads the active reading log and optional existing book.
 2. The user enters values manually or searches for metadata.
+   Metadata search runs through LiveView's asynchronous tasks; a new search
+   cancels the previous request and the form remains editable while it runs.
 3. A selected metadata result prefills the shared form.
 4. The optional word estimator can calculate an estimated total from a sample.
 5. An uploaded image or cover URL is stored in the application-data directory.
@@ -238,11 +246,14 @@ removes associated local files.
    containing `reading_log.db` and `covers/`.
 2. `BackupArchive` safely stages the fixed ZIP layout; legacy SQLite files are
    staged directly.
-3. `DatabaseValidation` checks integrity and derives migration compatibility
-   from the repository migration files.
+3. Validation runs asynchronously after upload. `DatabaseValidation` checks
+   integrity and derives migration compatibility from repository migration files.
+   Older backups are migrated in staging and checked again before confirmation.
 4. The current database and covers are archived before replacement.
 5. Database replacement is rolled back if cover replacement fails.
 6. The repository connection is safely restarted around the file swap.
+   Restart and rollback failures are reported explicitly, with recovery paths
+   preserved. The repository remains stopped when rollback fails.
 
 ## Earlier Refactor Pass
 

@@ -13,14 +13,14 @@ defmodule CiBookTracker.DatabaseValidation do
           | {:missing_tables, [String.t()]}
           | :incompatible_migrations
 
-  @spec validate(String.t()) :: :ok | {:error, error()}
-  def validate(path) do
+  @spec validate(String.t(), keyword()) :: :ok | {:error, error()}
+  def validate(path, opts \\ []) do
     with true <- File.regular?(path) || {:error, :not_readable},
          {:ok, connection} <- Sqlite3.open(path, mode: :readonly) do
       try do
         with :ok <- validate_integrity(connection),
-             :ok <- validate_tables(connection),
-             :ok <- validate_migrations(connection) do
+             :ok <- validate_tables(connection, opts),
+             :ok <- validate_migrations(connection, opts) do
           :ok
         end
       after
@@ -57,23 +57,36 @@ defmodule CiBookTracker.DatabaseValidation do
     end
   end
 
-  defp validate_tables(connection) do
+  defp validate_tables(connection, opts) do
     with {:ok, rows} <-
            query(connection, "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name") do
       tables = Enum.map(rows, &List.first/1)
-      missing = @expected_tables -- tables
+
+      expected =
+        if opts[:allow_older?],
+          do: ~w(books reading_logs schema_migrations),
+          else: @expected_tables
+
+      missing = expected -- tables
       if missing == [], do: :ok, else: {:error, {:missing_tables, missing}}
     else
       {:error, _reason} -> {:error, :not_sqlite}
     end
   end
 
-  defp validate_migrations(connection) do
+  defp validate_migrations(connection, opts) do
     case query(connection, "SELECT version FROM schema_migrations ORDER BY version") do
       {:ok, rows} ->
         versions = Enum.map(rows, fn [version] -> normalize_version(version) end)
 
-        if versions == expected_migration_versions(),
+        expected = expected_migration_versions()
+
+        compatible? =
+          versions == expected ||
+            (opts[:allow_older?] == true && versions != [] &&
+               versions == Enum.take(expected, length(versions)))
+
+        if compatible?,
           do: :ok,
           else: {:error, :incompatible_migrations}
 

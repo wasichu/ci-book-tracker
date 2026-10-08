@@ -108,6 +108,251 @@ defmodule CiBookTracker.DatabaseRestoreTest do
     assert {:error, :unsafe_archive} = DatabaseRestore.stage(path)
   end
 
+  test "upgrades an older SQLite backup in staging without modifying the source" do
+    directory = temporary_directory()
+    File.mkdir_p!(directory)
+    source = Path.join(directory, "old.db")
+    create_historical_database(source)
+    original = File.read!(source)
+    on_exit(fn -> File.rm_rf(directory) end)
+
+    assert {:error, _reason} = DatabaseValidation.validate(source)
+    assert {:ok, staged} = DatabaseRestore.stage(source)
+    on_exit(fn -> DatabaseRestore.cleanup_stage(staged) end)
+
+    assert :ok = DatabaseValidation.validate(staged)
+    assert File.read!(source) == original
+    assert historical_book_title(staged) == "An older book"
+  end
+
+  test "upgrades old ZIP backups and retains their cover files" do
+    directory = temporary_directory()
+    File.mkdir_p!(directory)
+    source = Path.join(directory, "old.db")
+    covers = Path.join(directory, "covers")
+    File.mkdir_p!(covers)
+    File.write!(Path.join(covers, "cover.jpg"), "old cover")
+    create_historical_database(source)
+    archive = Path.join(directory, "old.zip")
+
+    {:ok, _} =
+      DatabaseBackup.create_archive(
+        database_path: source,
+        cover_directory: covers,
+        output_path: archive
+      )
+
+    original = File.read!(archive)
+    on_exit(fn -> File.rm_rf(directory) end)
+
+    assert {:ok, staged} = DatabaseRestore.stage(archive)
+    on_exit(fn -> DatabaseRestore.cleanup_stage(staged) end)
+    assert :ok = DatabaseValidation.validate(staged.database_path)
+    assert historical_book_title(staged.database_path) == "An older book"
+    assert File.read!(Path.join(staged.cover_directory, "cover.jpg")) == "old cover"
+    assert File.read!(archive) == original
+  end
+
+  test "rejects newer or incomplete migration histories without changing the source" do
+    for versions <- [
+          [99_999_999_999_999],
+          [List.last(DatabaseValidation.expected_migration_versions())]
+        ] do
+      source = temporary_path("unsupported")
+      create_database(source)
+      {:ok, db} = Sqlite3.open(source)
+      :ok = Sqlite3.execute(db, "DELETE FROM schema_migrations")
+
+      for version <- versions,
+          do: Sqlite3.execute(db, "INSERT INTO schema_migrations VALUES (#{version})")
+
+      Sqlite3.close(db)
+      original = File.read!(source)
+      on_exit(fn -> File.rm(source) end)
+
+      assert {:error, :incompatible_migrations} = DatabaseRestore.stage(source)
+      assert File.read!(source) == original
+    end
+  end
+
+  test "failed migrations leave the original backup intact" do
+    source = temporary_path("broken_old")
+    create_database(source)
+    {:ok, db} = Sqlite3.open(source)
+    first = hd(DatabaseValidation.expected_migration_versions())
+    Sqlite3.execute(db, "DELETE FROM schema_migrations WHERE version != #{first}")
+    Sqlite3.close(db)
+    original = File.read!(source)
+    on_exit(fn -> File.rm(source) end)
+
+    assert {:error, :migration_failed} = DatabaseRestore.stage(source)
+    assert File.read!(source) == original
+  end
+
+  defp create_historical_database(path) do
+    repo = CiBookTracker.DatabaseRestore.Migration.Repo
+
+    {:ok, pid} =
+      repo.start_link(
+        name: nil,
+        database: path,
+        pool_size: 2,
+        journal_mode: :delete,
+        pool: DBConnection.ConnectionPool
+      )
+
+    try do
+      Ecto.Migrator.run(repo, CiBookTracker.DatabaseRestore.Migration.sources(), :up,
+        dynamic_repo: pid,
+        to: hd(DatabaseValidation.expected_migration_versions()),
+        migration_lock: false,
+        log: false
+      )
+    after
+      Supervisor.stop(pid)
+    end
+
+    {:ok, db} = Sqlite3.open(path)
+
+    Sqlite3.execute(
+      db,
+      "INSERT INTO reading_logs VALUES ('2026-06-01', '2026-06-01', 1000, 'es', 'Spanish', 'log-id')"
+    )
+
+    Sqlite3.execute(
+      db,
+      "INSERT INTO books (id, title, reading_log_id, status, added_on, inserted_at, updated_at) VALUES ('book-id', 'An older book', 'log-id', 'want_to_read', '2026-06-01', '2026-06-01', '2026-06-01')"
+    )
+
+    Sqlite3.close(db)
+  end
+
+  defp historical_book_title(path) do
+    {:ok, db} = Sqlite3.open(path, mode: :readonly)
+    {:ok, statement} = Sqlite3.prepare(db, "SELECT title FROM books")
+    {:ok, [[title]]} = Sqlite3.fetch_all(db, statement)
+    Sqlite3.release(db, statement)
+    Sqlite3.close(db)
+    title
+  end
+
+  defmodule RestartFailure do
+    def prepare(_manage?), do: {:ok, true}
+    def restart, do: {:error, :restart_unavailable}
+  end
+
+  defmodule ReplacementFailure do
+    def rename(source, target) do
+      if String.starts_with?(Path.basename(source), ".ci_book_tracker_restore_"),
+        do: {:error, :eacces},
+        else: File.rename(source, target)
+    end
+  end
+
+  defmodule RollbackFailure do
+    def rename(source, target) do
+      if String.starts_with?(Path.basename(source), ".ci_book_tracker_restore_") ||
+           String.contains?(source, ".pre_restore_"),
+         do: {:error, :eacces},
+         else: File.rename(source, target)
+    end
+  end
+
+  test "reports a restart failure even when the backup was applied" do
+    directory = temporary_directory()
+    File.mkdir_p!(directory)
+    target = Path.join(directory, "reading_log.db")
+    source = Path.join(directory, "source.db")
+    create_database(target, marker: "current")
+    create_database(source, marker: "restored")
+    on_exit(fn -> File.rm_rf(directory) end)
+
+    assert {:error, {:repo_restart_failed, {:ok, %{backup_path: backup}}, :restart_unavailable}} =
+             DatabaseRestore.restore(source, target_path: target, runtime: RestartFailure)
+
+    assert marker(target) == "restored"
+    assert backup_marker(backup) == "current"
+  end
+
+  test "restores the original database if replacement fails" do
+    directory = temporary_directory()
+    File.mkdir_p!(directory)
+    target = Path.join(directory, "reading_log.db")
+    source = Path.join(directory, "source.db")
+    create_database(target, marker: "current")
+    create_database(source, marker: "restored")
+    on_exit(fn -> File.rm_rf(directory) end)
+
+    assert {:error, :eacces} =
+             DatabaseRestore.restore(source,
+               target_path: target,
+               manage_repo?: false,
+               file_system: ReplacementFailure
+             )
+
+    assert marker(target) == "current"
+  end
+
+  test "preserves the recovery file and reports its path if rollback also fails" do
+    directory = temporary_directory()
+    File.mkdir_p!(directory)
+    target = Path.join(directory, "reading_log.db")
+    source = Path.join(directory, "source.db")
+    create_database(target, marker: "current")
+    create_database(source, marker: "restored")
+    on_exit(fn -> File.rm_rf(directory) end)
+
+    assert {:error, {:rollback_failed, :eacces, :eacces, recovery_path}} =
+             DatabaseRestore.restore(source,
+               target_path: target,
+               manage_repo?: false,
+               file_system: RollbackFailure,
+               runtime: RestartFailure
+             )
+
+    assert marker(recovery_path) == "current"
+
+    assert DatabaseRestore.error_message({:rollback_failed, :eacces, :eacces, recovery_path}) =~
+             recovery_path
+  end
+
+  test "rolls the database back when cover replacement fails" do
+    directory = temporary_directory()
+    File.mkdir_p!(directory)
+    target = Path.join(directory, "reading_log.db")
+    source = Path.join(directory, "source.db")
+    covers = Path.join(directory, "covers")
+    source_covers = Path.join(directory, "source_covers")
+    archive = Path.join(directory, "backup.zip")
+    File.mkdir_p!(source_covers)
+    File.write!(Path.join(source_covers, "new.jpg"), "new cover")
+    create_database(target, marker: "current")
+    create_database(source, marker: "restored")
+    # A file occupying the cover-directory path causes the directory swap to fail.
+    File.write!(covers, "occupied")
+    on_exit(fn -> File.rm_rf(directory) end)
+
+    {:ok, _} =
+      DatabaseBackup.create_archive(
+        database_path: source,
+        cover_directory: source_covers,
+        output_path: archive
+      )
+
+    {:ok, staged} = DatabaseRestore.stage(archive)
+    on_exit(fn -> DatabaseRestore.cleanup_stage(staged) end)
+
+    assert {:error, _reason} =
+             DatabaseRestore.restore(staged,
+               target_path: target,
+               cover_directory: covers,
+               manage_repo?: false
+             )
+
+    assert marker(target) == "current"
+    assert File.read!(covers) == "occupied"
+  end
+
   defp create_database(path, opts \\ []) do
     tables =
       Keyword.get(opts, :tables, ~w(reading_logs books provider_settings schema_migrations))
