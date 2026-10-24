@@ -176,6 +176,15 @@ GitHub Actions runs `mix ci` to check formatting without rewriting files,
 compile with warnings treated as errors, run tests, and build assets using the
 pinned toolchain. A separate job runs `mix hex.audit` for dependency advisories.
 
+Dependabot checks Elixir dependencies and GitHub Actions every Monday at 09:00
+America/Chicago. Minor and patch updates are grouped by ecosystem; major
+updates arrive separately. Updates open pull requests for review and run the
+normal CI checks (including native package builds for application changes).
+Merging stays manual. CI also runs weekly while the repository is idle to
+catch new dependency advisories and regressions. The Elixir/OTP toolchain pins
+in `.tool-versions` and asset-tool versions in `config/config.exs` still need
+manual maintenance.
+
 For a maintainer-oriented overview of the domain, LiveViews, persistence,
 metadata normalization, backup workflows, and final refactor decisions, see
 [`docs/architecture.md`](docs/architecture.md).

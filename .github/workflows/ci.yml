@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+  schedule:
+    # Keep checking for advisories and regressions even when the repo is idle.
+    - cron: "23 15 * * 1"
 
 permissions:
   contents: read
