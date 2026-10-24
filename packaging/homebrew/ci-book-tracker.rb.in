@@ -21,19 +21,36 @@ class CiBookTracker < Formula
   end
 
   on_linux do
+    depends_on "patchelf" => :build
     depends_on arch: :x86_64
+    depends_on "ncurses"
+    depends_on "openssl@3"
+    depends_on "zlib"
   end
 
   def install
     libexec.install Dir["*"]
     bin.write_exec_script libexec/"bin/ci-book-tracker"
+
+    if OS.linux?
+      # The upstream archive uses Ubuntu libraries. Prefer the matching Homebrew
+      # libraries when installing through this formula, including after bottling.
+      libraries = %w[ncurses openssl@3 zlib].map { |name| formula_opt_lib(name).to_s }
+      libexec.glob("**/*").select(&:file?).each do |file|
+        next if file.binread(4) != "\x7FELF"
+
+        original_rpath = Utils.safe_popen_read("patchelf", "--print-rpath", file).strip
+        rpath = (libraries + original_rpath.split(":")).reject(&:empty?).uniq.join(":")
+        system "patchelf", "--set-rpath", rpath, file
+      end
+    end
   end
 
   def caveats
     <<~EOS
       Run ci-book-tracker, then open http://localhost:4000.
       Data and the automatically generated session secret live in your user data directory.
-      Linux packages require Ubuntu 24.04 or compatible glibc 2.39+, OpenSSL 3 and ncurses 6.
+      Linux packages require Ubuntu 24.04 or compatible glibc 2.39+.
     EOS
   end
 

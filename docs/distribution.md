@@ -11,12 +11,16 @@ than a single executable.
 | --- | --- | --- |
 | `macos-arm64` | `macos-15` | Apple Silicon, macOS 15+, standard `/opt/homebrew` installation, Homebrew OpenSSL 3 and ncurses |
 | `macos-x86_64` | `macos-15-intel` | Intel, macOS 15+, standard `/usr/local` installation, Homebrew OpenSSL 3 and ncurses |
-| `linux-x86_64` | `ubuntu-24.04` | x86-64, Ubuntu 24.04 or compatible glibc 2.39+, OpenSSL 3, ncurses 6 and C++ runtime |
+| `linux-x86_64` | `ubuntu-24.04` | x86-64, Ubuntu 24.04 or compatible glibc 2.39+, OpenSSL 3, ncurses 6, zlib and C++ runtime |
 
 These packages include ERTS but still depend on platform libraries. They are
 not universal macOS binaries or static Linux binaries. Alpine/musl and Linux
 ARM are not currently packaged. On Ubuntu, install runtime libraries with
-`sudo apt install libssl3t64 libncurses6 libtinfo6 libstdc++6`.
+`sudo apt install libssl3t64 libncurses6 libtinfo6 zlib1g libstdc++6`.
+
+For Homebrew installations, the formula installs its library dependencies and
+adjusts the Linux executables to use Homebrew's OpenSSL, ncurses, and zlib.
+The direct Linux archive continues to use the system libraries listed above.
 
 ## Local build and validation
 
