@@ -88,9 +88,14 @@ defmodule CiBookTracker.MixProject do
   defp aliases do
     [
       setup: ["deps.get", "ash.setup", "assets.setup", "assets.build"],
-      "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
-      "assets.build": ["compile", "tailwind ci_book_tracker", "esbuild ci_book_tracker"],
+      "assets.setup": [
+        "compile",
+        "assets.install_tailwind --if-missing",
+        "esbuild.install --if-missing"
+      ],
+      "assets.build": ["assets.setup", "tailwind ci_book_tracker", "esbuild ci_book_tracker"],
       "assets.deploy": [
+        "assets.setup",
         "tailwind ci_book_tracker --minify",
         "esbuild ci_book_tracker --minify",
         "phx.digest"

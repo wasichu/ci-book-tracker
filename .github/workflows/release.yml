@@ -45,6 +45,12 @@ jobs:
         with:
           version-file: .tool-versions
           version-type: strict
+      - uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ matrix.target }}-release-${{ hashFiles('.tool-versions', 'mix.lock') }}
       - run: mix deps.get --only prod --check-locked
       - name: Check release version
         id: version
