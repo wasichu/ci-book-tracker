@@ -26,7 +26,7 @@ class CiBookTracker < Formula
 
   def install
     libexec.install Dir["*"]
-    (bin/"ci-book-tracker").write_exec_script libexec/"bin/ci-book-tracker"
+    bin.write_exec_script libexec/"bin/ci-book-tracker"
   end
 
   def caveats
