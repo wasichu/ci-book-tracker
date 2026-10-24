@@ -43,7 +43,7 @@ class CiBookTracker < Formula
     pid = spawn({ "PORT" => port.to_s, "CI_BOOK_TRACKER_DATA_DIR" => testpath.to_s,
                   "DATABASE_PATH" => (testpath/"reading_log.db").to_s,
                   "SECRET_KEY_BASE" => "a" * 64 },
-                bin/"ci-book-tracker", out: testpath/"server.log", err: [:child, :out])
+                (bin/"ci-book-tracker").to_s, out: (testpath/"server.log").to_s, err: [:child, :out])
     begin
       sleep 1
       response = shell_output("curl --fail --silent --retry 30 --retry-connrefused " \
