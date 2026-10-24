@@ -39,6 +39,12 @@ class CiBookTracker < Formula
       libexec.glob("**/*").select(&:file?).each do |file|
         next if file.binread(4) != "\x7FELF"
 
+        # Homebrew exposes the terminfo API in its combined ncurses library.
+        needed = Utils.safe_popen_read("patchelf", "--print-needed", file).lines.map(&:strip)
+        if needed.include?("libtinfo.so.6")
+          system "patchelf", "--replace-needed", "libtinfo.so.6", "libncursesw.so.6", file
+        end
+
         original_rpath = Utils.safe_popen_read("patchelf", "--print-rpath", file).strip
         rpath = (libraries + original_rpath.split(":")).reject(&:empty?).uniq.join(":")
         system "patchelf", "--set-rpath", rpath, file
