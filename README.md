@@ -123,9 +123,19 @@ database migrations automatically. No developer toolchain is needed to run a
 package.
 
 See [distribution instructions](docs/distribution.md) for building packages,
-platform requirements, configuration, and publishing the Homebrew tap. The tap
-installation becomes available after a release and the tap repository are
-published.
+platform requirements, configuration, and publishing the Homebrew tap.
+
+Install and start the application:
+
+```sh
+brew install wasichu/tap/ci-book-tracker
+ci-book-tracker
+```
+
+Open [http://localhost:4000](http://localhost:4000). Stop with Ctrl-C. Packages
+target macOS 15+ on Apple Silicon and Intel, and Ubuntu 24.04 or compatible
+x86-64 Linux systems. See the distribution instructions for system libraries
+required by the Linux package.
 
 ## Development
 
