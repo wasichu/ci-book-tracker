@@ -9,6 +9,9 @@ defmodule CiBookTracker.Application do
   def start(_type, _args) do
     children = [
       CiBookTracker.Repo,
+      {Ecto.Migrator,
+       repos: [CiBookTracker.Repo],
+       skip: not Application.get_env(:ci_book_tracker, :migrate_on_start, false)},
       CiBookTrackerWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:ci_book_tracker, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: CiBookTracker.PubSub},

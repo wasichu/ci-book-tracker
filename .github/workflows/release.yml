@@ -1,0 +1,107 @@
+name: Release packages
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/release.yml"
+      - "config/**"
+      - "assets/**"
+      - "lib/**"
+      - "priv/repo/**"
+      - "priv/static/**"
+      - "rel/**"
+      - "scripts/**"
+      - "packaging/**"
+      - "mix.exs"
+      - "mix.lock"
+      - "LICENSE"
+      - ".tool-versions"
+  push:
+    tags: ["v[0-9]*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            target: macos-arm64
+          - runner: macos-15-intel
+            target: macos-x86_64
+          - runner: ubuntu-24.04
+            target: linux-x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    env:
+      MIX_ENV: prod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          version-file: .tool-versions
+          version-type: strict
+      - run: mix deps.get --only prod --check-locked
+      - name: Check release version
+        id: version
+        shell: bash
+        run: |
+          version=$(python3 -c 'import pathlib,re; print(re.search(r"version: \"([^\"]+)\"", pathlib.Path("mix.exs").read_text())[1])')
+          if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "Tag must match mix.exs version v$version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - run: mix compile --warnings-as-errors
+      - run: mix assets.setup
+      - run: mix assets.deploy
+      - run: mix release
+      - name: Package and test relocated release
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          mkdir -p dist
+          cp LICENSE _build/prod/rel/ci_book_tracker/LICENSE
+          tar -czf "dist/ci-book-tracker-$VERSION-$TARGET.tar.gz" -C _build/prod/rel/ci_book_tracker .
+          mkdir -p "$RUNNER_TEMP/relocated app"
+          tar -xzf "dist/ci-book-tracker-$VERSION-$TARGET.tar.gz" -C "$RUNNER_TEMP/relocated app"
+          python3 scripts/smoke_release.py "$RUNNER_TEMP/relocated app"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+      - name: Generate formula and checksums
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python3 scripts/generate_homebrew.py "${RELEASE_TAG#v}" dist dist/ci-book-tracker.rb
+          cd dist
+          sha256sum *.tar.gz > SHA256SUMS
+          ruby -c ci-book-tracker.rb
+      - name: Publish draft for review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" dist/* --verify-tag --draft --generate-notes

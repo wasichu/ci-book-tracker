@@ -1,0 +1,24 @@
+#!/bin/sh
+set -eu
+
+RELEASE_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+
+case "${1:-}" in
+  --version)
+    # Mix writes this file without a final newline; read still assigns at EOF.
+    read -r erts_version app_version < "$RELEASE_ROOT/releases/start_erl.data" || test -n "${app_version:-}"
+    printf 'CI Book Tracker %s\n' "$app_version"
+    ;;
+  --help|-h)
+    printf '%s\n' 'Usage: ci-book-tracker [--version | --help]' \
+      'Starts the local app at http://localhost:4000 (Ctrl-C to stop).' \
+      'Set PORT to choose another port; CI_BOOK_TRACKER_DATA_DIR to move app data.'
+    ;;
+  "")
+    exec "$RELEASE_ROOT/bin/ci_book_tracker" start
+    ;;
+  *)
+    printf 'Unknown argument: %s\n' "$1" >&2
+    exit 1
+    ;;
+esac

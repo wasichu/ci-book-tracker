@@ -40,3 +40,6 @@ npm-debug.log
 *.db-*
 *.sqlite
 *.sqlite-*
+
+# Python helpers used by the native release workflow.
+__pycache__/

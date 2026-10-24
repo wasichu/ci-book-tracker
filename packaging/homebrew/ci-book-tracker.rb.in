@@ -1,0 +1,56 @@
+class CiBookTracker < Formula
+  desc "Local-first reading tracker for language learners"
+  homepage "https://github.com/wasichu/ci-book-tracker"
+  version "@VERSION@"
+  license "MIT"
+
+  on_macos do
+    depends_on macos: :sequoia
+    depends_on "openssl@3"
+    depends_on "ncurses"
+
+    on_arm do
+      url "https://github.com/wasichu/ci-book-tracker/releases/download/v@VERSION@/ci-book-tracker-@VERSION@-macos-arm64.tar.gz"
+      sha256 "@MACOS_ARM64_SHA256@"
+    end
+    on_intel do
+      url "https://github.com/wasichu/ci-book-tracker/releases/download/v@VERSION@/ci-book-tracker-@VERSION@-macos-x86_64.tar.gz"
+      sha256 "@MACOS_X86_64_SHA256@"
+    end
+  end
+
+  on_linux do
+    depends_on arch: :x86_64
+    url "https://github.com/wasichu/ci-book-tracker/releases/download/v@VERSION@/ci-book-tracker-@VERSION@-linux-x86_64.tar.gz"
+    sha256 "@LINUX_X86_64_SHA256@"
+  end
+
+  def install
+    libexec.install Dir["*"]
+    (bin/"ci-book-tracker").write_exec_script libexec/"bin/ci-book-tracker"
+  end
+
+  def caveats
+    <<~EOS
+      Run ci-book-tracker, then open http://localhost:4000.
+      Data and the automatically generated session secret live in your user data directory.
+      Linux packages require Ubuntu 24.04 or compatible glibc 2.39+, OpenSSL 3 and ncurses 6.
+    EOS
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/ci-book-tracker --version")
+    port = free_port
+    pid = spawn({ "PORT" => port.to_s, "CI_BOOK_TRACKER_DATA_DIR" => testpath.to_s,
+                  "DATABASE_PATH" => (testpath/"reading_log.db").to_s,
+                  "SECRET_KEY_BASE" => "a" * 64 },
+                bin/"ci-book-tracker", out: testpath/"server.log", err: [:child, :out])
+    begin
+      sleep 1
+      assert_match 'id="reading-log-selector"', shell_output("curl --fail --silent --retry 30 --retry-connrefused --retry-delay 1 http://127.0.0.1:#{port}")
+    ensure
+      Process.kill("TERM", pid)
+      Process.wait(pid)
+    end
+  end
+end

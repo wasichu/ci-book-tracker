@@ -114,6 +114,19 @@ original project philosophy.
 
 ![Cover image URL, upload, and preview controls](docs/screenshots/cover-art.png)
 
+## Native Packages and Homebrew
+
+Native release packaging targets Apple Silicon macOS, Intel macOS, and x86-64
+Linux using standard Phoenix releases with bundled Erlang/Elixir. The release
+launcher starts the local web app, creates its session secret, and applies
+database migrations automatically. No developer toolchain is needed to run a
+package.
+
+See [distribution instructions](docs/distribution.md) for building packages,
+platform requirements, configuration, and publishing the Homebrew tap. The tap
+installation becomes available after a release and the tap repository are
+published.
+
 ## Development
 
 Requirements:
@@ -247,7 +260,7 @@ and authorization.
 
 Possible future work includes:
 
-- Burrito packaging for easier desktop distribution
+- Homebrew background service support
 - Improved metadata provider coverage and matching
 - Better word estimation tools
 - Additional import options and quality-of-life improvements
