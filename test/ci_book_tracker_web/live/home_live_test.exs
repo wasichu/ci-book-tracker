@@ -41,6 +41,18 @@ defmodule CiBookTrackerWeb.HomeLiveTest do
     assert has_element?(view, "#reading-log-#{spanish.id}", "Spanish essays")
     assert has_element?(view, "#reading-log-#{spanish.id}", "Spanish")
     assert has_element?(view, "#reading-log-#{spanish.id}", "No word goal set")
+
+    assert has_element?(
+             view,
+             "#workspace-commands [data-command-key='1'][href='/reading-logs/#{french.id}/open']",
+             "French novels"
+           )
+
+    assert has_element?(
+             view,
+             "#workspace-commands [data-command-key='2'][href='/reading-logs/#{spanish.id}/open']",
+             "Spanish essays"
+           )
   end
 
   test "auto-open session preference navigates from root to the dashboard", %{conn: conn} do

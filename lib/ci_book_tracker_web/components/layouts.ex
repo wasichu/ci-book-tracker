@@ -208,6 +208,16 @@ defmodule CiBookTrackerWeb.Layouts do
             name="hero-language"
             class="size-5"
           /> Manage reading logs <kbd>L</kbd></.link>
+          <p :if={@workspace.logs != []} class="workspace-eyebrow workspace-command-group">
+            Reading logs
+          </p>
+          <.link
+            :for={{log, number} <- Enum.with_index(Enum.take(@workspace.logs, 9), 1)}
+            href={~p"/reading-logs/#{log.id}/open"}
+            class="workspace-command"
+            data-command
+            data-command-key={to_string(number)}
+          ><.icon name="hero-book-open" class="size-5" /> {log.name} <kbd>{number}</kbd></.link>
         </nav>
       </dialog>
     </div>

@@ -8,6 +8,32 @@ Manual entry and local cover uploads work fully offline. Internet access is
 only needed for optional metadata lookups and downloading cover images from
 URLs.
 
+## Screenshots
+
+### Workbench and book inspector
+
+![Slate and Iris Workbench showing a sample Spanish library, book covers, filters, and the selected book inspector](docs/screenshots/dashboard.png)
+
+### Reading logs
+
+![Reading log selection with sample Spanish and French logs](docs/screenshots/home.png)
+
+### Book details
+
+![Book details and reading actions for a sample book](docs/screenshots/book-details.png)
+
+### Cover editor
+
+![Cover image upload and preview in the tabbed book editor](docs/screenshots/cover-art.png)
+
+### Reading progress
+
+![Reading-goal progress and completed-book totals for a sample reading log](docs/screenshots/progress.png)
+
+### Command menu
+
+![Command menu with keyboard shortcuts for tools and individual reading logs](docs/screenshots/commands.png)
+
 ## Why This Project Exists
 
 Reading a large amount of understandable, interesting material can be a useful
@@ -105,7 +131,7 @@ make more room, filter the library, or open Progress to review a reading goal.
 Book editing and settings use tabs to keep related controls together.
 
 Press Command-K (Control-K on other platforms) to open the command menu. While
-the menu is open, use the displayed letter shortcuts:
+the menu is open, use the displayed shortcuts:
 
 | Key | Command |
 | --- | --- |
@@ -116,6 +142,7 @@ the menu is open, use the displayed letter shortcuts:
 | B | Backup and restore |
 | S | Settings |
 | L | Manage reading logs |
+| 1–9 | Open the reading log shown beside that number |
 
 In the library, `/` focuses book search and the arrow keys or J/K move between
 books when you are not typing into a field. Escape closes the book inspector.
@@ -245,9 +272,9 @@ standalone `.db`, `.sqlite`, and `.sqlite3` exports. A full restore replaces
 the database and, for ZIP backups, the local covers. It also creates a
 timestamped safety ZIP first.
 
-To import a backup, open **Restore from Backup** on the front page (or **Import / Restore
+To import a backup, open **Restore from backup** on the front page (or **Import / Restore
 Backup** on `/backup`) and select your backup file. It uploads and validates automatically.
-Click **Restore Backup** to apply it. If the open log contains books, review the
+Click **Restore backup** to apply it. If the open log contains books, review the
 replacement confirmation first. Restart
 CI Book Tracker after the restore completes.
 

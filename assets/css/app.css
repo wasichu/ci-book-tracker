@@ -108,6 +108,7 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .workspace-command { display: flex; align-items: center; gap: 12px; padding: 12px 9px; border-radius: 6px; font-size: 13px; }
 .workspace-command:hover { background: var(--work-selected); }
 .workspace-command > kbd { margin-left: auto; }
+.workspace-command-group { margin-top: 12px; padding: 14px 9px 3px; border-top: 1px solid var(--work-line); }
 .workspace-tabs { display: flex; gap: 20px; align-items: center; border-bottom: 1px solid var(--work-line); flex-shrink: 0; }
 .workspace-tabs > :is(button, a) { padding: 11px 0; border-bottom: 2px solid transparent; color: var(--work-muted); font-size: 12px; background: transparent; cursor: pointer; white-space: nowrap; }
 .workspace-tabs > .is-active { color: var(--work-text); border-bottom-color: var(--work-accent); }

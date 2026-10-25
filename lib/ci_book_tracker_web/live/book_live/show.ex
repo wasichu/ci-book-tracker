@@ -156,8 +156,7 @@ defmodule CiBookTrackerWeb.BookLive.Show do
               phx-value-action={action}
               phx-disable-with={"#{BookActions.label(action)}..."}
               class={[
-                "inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl px-5 text-sm font-semibold transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0 disabled:translate-y-0 disabled:cursor-wait disabled:opacity-60",
-                BookActions.class(action),
+                "workspace-button",
                 layout_class
               ]}
             >
@@ -184,21 +183,21 @@ defmodule CiBookTrackerWeb.BookLive.Show do
               <.link
                 id="find-metadata"
                 navigate={~p"/books/#{@book.id}/edit?metadata=refresh"}
-                class="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 text-sm font-semibold text-amber-900 transition hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+                class="workspace-button"
               >
                 <.icon name="hero-arrow-path" class="size-4" /> Refresh metadata
               </.link>
               <.link
                 id="edit-book"
                 navigate={~p"/books/#{@book.id}/edit"}
-                class="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+                class="workspace-button"
               >
                 <.icon name="hero-pencil-square" class="size-4" /> Edit Book
               </.link>
             </div>
           </div>
 
-          <dl class="mt-6 divide-y divide-slate-100">
+          <dl class="mt-6">
             <.detail_row label="Status" value={BookFormat.status_label(@book.status)} />
             <.detail_row label="Difficulty" value={@book.difficulty_label} />
             <.detail_row label="Page count" value={format_pages(@book.page_count)} />
