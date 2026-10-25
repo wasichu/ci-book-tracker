@@ -43,6 +43,9 @@ Further background:
 
 ![Slate and Iris Workbench showing a sample Spanish library, book covers, filters, and the selected book inspector](docs/screenshots/dashboard.png)
 
+<details>
+<summary>More screenshots</summary>
+
 ### Reading logs
 
 ![Reading log selection with sample Spanish and French logs](docs/screenshots/home.png)
@@ -62,6 +65,8 @@ Further background:
 ### Command menu
 
 ![Command menu with keyboard shortcuts for tools and individual reading logs](docs/screenshots/commands.png)
+
+</details>
 
 ## Features
 
