@@ -8,32 +8,6 @@ Manual entry and local cover uploads work fully offline. Internet access is
 only needed for optional metadata lookups and downloading cover images from
 URLs.
 
-## Screenshots
-
-### Workbench and book inspector
-
-![Slate and Iris Workbench showing a sample Spanish library, book covers, filters, and the selected book inspector](docs/screenshots/dashboard.png)
-
-### Reading logs
-
-![Reading log selection with sample Spanish and French logs](docs/screenshots/home.png)
-
-### Book details
-
-![Book details and reading actions for a sample book](docs/screenshots/book-details.png)
-
-### Cover editor
-
-![Cover image upload and preview in the tabbed book editor](docs/screenshots/cover-art.png)
-
-### Reading progress
-
-![Reading-goal progress and completed-book totals for a sample reading log](docs/screenshots/progress.png)
-
-### Command menu
-
-![Command menu with keyboard shortcuts for tools and individual reading logs](docs/screenshots/commands.png)
-
 ## Why This Project Exists
 
 Reading a large amount of understandable, interesting material can be a useful
@@ -62,6 +36,32 @@ Further background:
 
 - [What is Extensive Reading?](https://erfoundation.org/wordpress/what_is/)
 - [Project inspiration video](https://www.youtube.com/watch?v=OheGJ2geFnA)
+
+## Screenshots
+
+### Workbench and book inspector
+
+![Slate and Iris Workbench showing a sample Spanish library, book covers, filters, and the selected book inspector](docs/screenshots/dashboard.png)
+
+### Reading logs
+
+![Reading log selection with sample Spanish and French logs](docs/screenshots/home.png)
+
+### Book details
+
+![Book details and reading actions for a sample book](docs/screenshots/book-details.png)
+
+### Cover editor
+
+![Cover image upload and preview in the tabbed book editor](docs/screenshots/cover-art.png)
+
+### Reading progress
+
+![Reading-goal progress and completed-book totals for a sample reading log](docs/screenshots/progress.png)
+
+### Command menu
+
+![Command menu with keyboard shortcuts for tools and individual reading logs](docs/screenshots/commands.png)
 
 ## Features
 
