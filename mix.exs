@@ -4,7 +4,7 @@ defmodule CiBookTracker.MixProject do
   def project do
     [
       app: :ci_book_tracker,
-      version: "0.1.0",
+      version: "0.2.0",
       releases: [ci_book_tracker: [include_erts: true]],
       elixir: "~> 1.20.4",
       elixirc_paths: elixirc_paths(Mix.env()),

@@ -86,7 +86,7 @@ another installation therefore starts with fresh browser sessions.
 
 1. Run `mix precommit`, update the version in `mix.exs` as appropriate, and
    commit the changes. Back up personal data before testing upgrades.
-2. Push a matching stable tag, for example `v0.1.0` for version `0.1.0`.
+2. Push a matching stable tag, for example `v0.2.0` for version `0.2.0`.
 3. The release workflow builds and smoke-tests all three targets. Only after
    all succeed does it create a **draft** GitHub release containing the three
    archives, `SHA256SUMS`, and a generated `ci-book-tracker.rb` formula with

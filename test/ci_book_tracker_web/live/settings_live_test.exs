@@ -34,7 +34,7 @@ defmodule CiBookTrackerWeb.SettingsLiveTest do
     assert has_element?(view, "#open-library-settings", "Enabled")
     assert has_element?(view, "#google-books-settings", "Optional API key")
     assert has_element?(view, "#hardcover-settings", "API token")
-    assert has_element?(view, "#application-settings", "0.1.0")
+    assert has_element?(view, "#application-settings", "0.2.0")
     refute has_element?(view, "#application-settings", "Environment")
   end
 
