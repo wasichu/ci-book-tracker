@@ -31,57 +31,186 @@ defmodule CiBookTrackerWeb.Layouts do
     default: nil,
     doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
 
+  attr :workspace, :map, default: %{logs: [], log: nil, path: "/"}
+  attr :canvas, :boolean, default: false
+
   slot :inner_block, required: true
 
   def app(assigns) do
     ~H"""
-    <div class="min-h-screen bg-[radial-gradient(circle_at_top,_#fffbeb_0,_#f8fafc_42rem)]">
-      <header class="border-b border-slate-200/80 bg-white/80 backdrop-blur">
-        <div class="mx-auto flex max-w-3xl items-center justify-between gap-3 px-5 py-4">
-          <a href={~p"/"} class="flex min-w-0 items-center gap-3 transition hover:text-amber-700">
-            <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-amber-100 text-amber-800">
-              <.icon name="hero-book-open" class="size-5" />
-            </span>
-            <span class="min-w-0">
-              <span class="block truncate text-sm font-semibold tracking-tight">
-                Comprehensible Input Reading Log
-              </span>
-              <span class="hidden text-xs text-slate-500 sm:block">
-                Language learning, one book at a time
-              </span>
-            </span>
-          </a>
-          <nav class="flex shrink-0 items-center gap-1" aria-label="Application tools">
+    <div
+      id="workspace"
+      class="workspace"
+      data-workspace
+      phx-mounted={JS.ignore_attributes(["data-sidebar", "data-progress"])}
+    >
+      <div id="workspace-client" phx-hook="Workspace" phx-update="ignore" class="hidden"></div>
+      <header class="workspace-header">
+        <button
+          type="button"
+          class="workspace-icon-button"
+          data-toggle-sidebar
+          aria-label="Toggle navigation"
+          aria-controls="workspace-sidebar"
+          aria-expanded="true"
+          phx-mounted={JS.ignore_attributes("aria-expanded")}
+        >
+          <.icon name="hero-bars-3" class="size-5" />
+        </button>
+        <.link id="workspace-home" navigate={~p"/?logs=all"} class="workspace-brand">
+          <.icon name="hero-book-open" class="size-5" /> <span>CI Book Tracker</span>
+        </.link>
+        <div :if={@workspace.log} class="workspace-context">
+          <span>{CiBookTrackerWeb.ReadingLogFormat.language_name(@workspace.log.language_code)}</span>
+          <span aria-hidden="true">/</span><span>{@workspace.log.name}</span>
+        </div>
+        <button type="button" class="workspace-button workspace-quiet ml-auto" data-open-commands>
+          <.icon name="hero-magnifying-glass" class="size-4" /> <span>Commands</span><kbd>⌘ K</kbd>
+        </button>
+      </header>
+      <.flash_group flash={@flash} />
+      <div class="workspace-body">
+        <aside id="workspace-sidebar" class="workspace-sidebar" aria-label="Application navigation">
+          <p class="workspace-eyebrow">Workspace</p>
+          <.link
+            id="workspace-library"
+            navigate={if @workspace.log, do: ~p"/dashboard", else: ~p"/"}
+            class={["workspace-nav", @workspace.path == "/dashboard" && "is-active"]}
+          >
+            <.icon name="hero-rectangle-stack" class="size-4" /> Library
+          </.link>
+          <.link
+            :if={@workspace.log}
+            id="workspace-progress"
+            navigate={~p"/dashboard?view=progress"}
+            class="workspace-nav"
+          >
+            <.icon name="hero-chart-bar" class="size-4" /> Progress
+          </.link>
+          <p class="workspace-eyebrow mt-7">Reading logs</p>
+          <.link
+            :for={log <- @workspace.logs}
+            href={~p"/reading-logs/#{log.id}/open"}
+            class={[
+              "workspace-nav workspace-log",
+              @workspace.log && @workspace.log.id == log.id && "is-active"
+            ]}
+            aria-current={if @workspace.log && @workspace.log.id == log.id, do: "page"}
+          >
+            <span class="workspace-dot"></span><span class="min-w-0 truncate">{log.name}</span><span class="workspace-log-language">{String.upcase(
+              log.language_code
+            )}</span>
+          </.link>
+          <.link navigate={~p"/reading-logs/new"} class="workspace-nav workspace-muted"><.icon
+            name="hero-plus"
+            class="size-4"
+          /> New reading log</.link>
+          <div class="workspace-sidebar-tools">
             <.link
               id="word-estimator-link"
               navigate={~p"/word-estimator"}
-              aria-label="Word estimator"
-              title="Word estimator"
-              class="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-slate-600 transition hover:bg-amber-50 hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+              class={["workspace-nav", @workspace.path == "/word-estimator" && "is-active"]}
             >
-              <.icon name="hero-calculator" class="size-4" />
-              <span class="hidden md:inline">Word Estimator</span>
+              <.icon name="hero-calculator" class="size-4" /> Word estimator
+            </.link>
+            <.link
+              id="workspace-backup"
+              navigate={~p"/backup"}
+              class={[
+                "workspace-nav",
+                @workspace.path in ["/backup", "/settings/restore"] && "is-active"
+              ]}
+            >
+              <.icon name="hero-archive-box" class="size-4" /> Backup and restore
             </.link>
             <.link
               id="settings-link"
               navigate={~p"/settings"}
-              aria-label="Settings"
-              title="Settings"
-              class="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-slate-600 transition hover:bg-amber-50 hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+              class={["workspace-nav", @workspace.path == "/settings" && "is-active"]}
             >
-              <.icon name="hero-cog-6-tooth" class="size-4" />
-              <span class="hidden sm:inline">Settings</span>
+              <.icon name="hero-adjustments-horizontal" class="size-4" /> Settings
             </.link>
-          </nav>
+          </div>
+          <span class="workspace-local"><span class="workspace-dot"></span>
+          Your library, saved locally</span>
+        </aside>
+        <main id="workspace-main" class={["workspace-content", !@canvas && "workspace-document"]}>
+          {render_slot(@inner_block)}
+        </main>
+      </div>
+      <footer class="workspace-footer">
+        <span class="workspace-dot"></span><span>Saved on this device</span>
+        <span class="ml-auto">⌘ K Commands</span>
+      </footer>
+      <dialog
+        id="workspace-commands"
+        class="workspace-command-dialog"
+        aria-labelledby="commands-title"
+        phx-update="ignore"
+      >
+        <div class="workspace-dialog-heading">
+          <h2 id="commands-title">Go anywhere</h2><button
+            type="button"
+            class="workspace-icon-button"
+            data-close-commands
+            aria-label="Close commands"
+          ><.icon name="hero-x-mark" class="size-5" /></button>
         </div>
-      </header>
-
-      <main class="mx-auto max-w-3xl px-5 py-8 sm:py-12">
-        {render_slot(@inner_block)}
-      </main>
+        <nav aria-label="Commands and keyboard shortcuts">
+          <.link
+            :if={@workspace.log}
+            navigate={~p"/books/new"}
+            class="workspace-command"
+            data-command
+            data-command-key="n"
+          ><.icon
+            name="hero-plus"
+            class="size-5"
+          /> Add a book <kbd>N</kbd></.link>
+          <.link
+            :if={@workspace.log}
+            navigate={~p"/books/import"}
+            class="workspace-command"
+            data-command
+            data-command-key="i"
+          ><.icon name="hero-document-arrow-up" class="size-5" /> Import books from CSV <kbd>I</kbd></.link>
+          <.link
+            navigate={~p"/word-estimator"}
+            class="workspace-command"
+            data-command
+            data-command-key="w"
+          ><.icon
+            name="hero-calculator"
+            class="size-5"
+          /> Word estimator <kbd>W</kbd></.link>
+          <.link
+            :if={@workspace.log}
+            navigate={~p"/dashboard?view=progress"}
+            class="workspace-command"
+            data-command
+            data-command-key="p"
+          ><.icon name="hero-chart-bar" class="size-5" /> Reading progress <kbd>P</kbd></.link>
+          <.link navigate={~p"/backup"} class="workspace-command" data-command data-command-key="b"><.icon
+            name="hero-archive-box"
+            class="size-5"
+          /> Backup and restore <kbd>B</kbd></.link>
+          <.link navigate={~p"/settings"} class="workspace-command" data-command data-command-key="s"><.icon
+            name="hero-adjustments-horizontal"
+            class="size-5"
+          /> Settings <kbd>S</kbd></.link>
+          <.link
+            href={~p"/reading-log-session"}
+            method="delete"
+            class="workspace-command"
+            data-command
+            data-command-key="l"
+          ><.icon
+            name="hero-language"
+            class="size-5"
+          /> Manage reading logs <kbd>L</kbd></.link>
+        </nav>
+      </dialog>
     </div>
-
-    <.flash_group flash={@flash} />
     """
   end
 
@@ -98,30 +227,29 @@ defmodule CiBookTrackerWeb.Layouts do
   def flash_group(assigns) do
     ~H"""
     <div id={@id} aria-live="polite">
-      <.flash kind={:info} flash={@flash} />
       <.flash kind={:error} flash={@flash} />
 
       <.flash
         id="client-error"
         kind={:error}
-        title={gettext("We can't find the internet")}
+        title={gettext("Connection lost")}
         phx-disconnected={show(".phx-client-error #client-error") |> JS.remove_attribute("hidden")}
         phx-connected={hide("#client-error") |> JS.set_attribute({"hidden", ""})}
         hidden
       >
-        {gettext("Attempting to reconnect")}
+        {gettext("Reconnecting to your local library…")}
         <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
       </.flash>
 
       <.flash
         id="server-error"
         kind={:error}
-        title={gettext("Something went wrong!")}
+        title={gettext("The app disconnected")}
         phx-disconnected={show(".phx-server-error #server-error") |> JS.remove_attribute("hidden")}
         phx-connected={hide("#server-error") |> JS.set_attribute({"hidden", ""})}
         hidden
       >
-        {gettext("Attempting to reconnect")}
+        {gettext("Reconnecting to your local library…")}
         <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
       </.flash>
     </div>

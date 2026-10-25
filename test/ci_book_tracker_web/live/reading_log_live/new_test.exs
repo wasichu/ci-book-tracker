@@ -20,7 +20,7 @@ defmodule CiBookTrackerWeb.ReadingLogLive.NewTest do
     assert has_element?(view, "label", "Unit")
     assert has_element?(view, "#reading_log_goal_unit option[value='million']", "Million words")
     assert has_element?(view, "label", "Automatically open this log next time")
-    assert has_element?(view, "#save-reading-log", "Create Reading Log")
+    assert has_element?(view, "#save-reading-log", "Create reading log")
   end
 
   test "requires a name", %{conn: conn} do
@@ -155,7 +155,7 @@ defmodule CiBookTrackerWeb.ReadingLogLive.NewTest do
     assert has_element?(view, "#reading_log_language_code option[value='es'][selected]")
     assert has_element?(view, "#reading_log_goal_amount[value='500']")
     assert has_element?(view, "#reading_log_goal_unit option[value='thousand'][selected]")
-    assert has_element?(view, "#save-reading-log", "Save Changes")
+    assert has_element?(view, "#save-reading-log", "Save changes")
     refute has_element?(view, "label", "Automatically open this log next time")
 
     result =

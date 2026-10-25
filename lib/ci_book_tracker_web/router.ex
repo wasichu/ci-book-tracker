@@ -17,18 +17,20 @@ defmodule CiBookTrackerWeb.Router do
   scope "/", CiBookTrackerWeb do
     pipe_through :browser
 
-    live "/", HomeLive, :index
-    live "/dashboard", DashboardLive, :index
-    live "/backup", BackupLive, :index
-    live "/settings", SettingsLive, :index
-    live "/settings/restore", DatabaseRestoreLive, :index
-    live "/word-estimator", WordEstimatorLive, :index
-    live "/reading-logs/new", ReadingLogLive.New, :new
-    live "/reading-logs/:id/edit", ReadingLogLive.New, :edit
-    live "/books/new", BookLive.Form, :new
-    live "/books/import", BookLive.Import, :new
-    live "/books/:id/edit", BookLive.Form, :edit
-    live "/books/:id", BookLive.Show, :show
+    live_session :workspace, on_mount: [{CiBookTrackerWeb.Workspace, :default}] do
+      live "/", HomeLive, :index
+      live "/dashboard", DashboardLive, :index
+      live "/backup", BackupLive, :index
+      live "/settings", SettingsLive, :index
+      live "/settings/restore", DatabaseRestoreLive, :index
+      live "/word-estimator", WordEstimatorLive, :index
+      live "/reading-logs/new", ReadingLogLive.New, :new
+      live "/reading-logs/:id/edit", ReadingLogLive.New, :edit
+      live "/books/new", BookLive.Form, :new
+      live "/books/import", BookLive.Import, :new
+      live "/books/:id/edit", BookLive.Form, :edit
+      live "/books/:id", BookLive.Show, :show
+    end
 
     get "/covers/:filename", BookCoverController, :show
     get "/reading-logs/:id/open", ReadingLogSessionController, :open

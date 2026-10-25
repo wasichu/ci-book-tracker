@@ -3,7 +3,7 @@ defmodule CiBookTracker.BackupArchive do
 
   @database_entry "reading_log.db"
   @max_cover_bytes 8 * 1024 * 1024
-  @max_archive_bytes 250 * 1024 * 1024
+  @max_archive_bytes 250_000_000
 
   defmodule StagedBackup do
     @moduledoc false
@@ -17,18 +17,45 @@ defmodule CiBookTracker.BackupArchive do
           }
   end
 
+  @spec max_bytes() :: pos_integer()
+  def max_bytes, do: @max_archive_bytes
+
+  @spec limit_label() :: String.t()
+  def limit_label, do: "#{div(@max_archive_bytes, 1_000_000)} MB"
+
+  @spec validate_file_size(String.t()) :: :ok | {:error, atom()}
+  def validate_file_size(path) do
+    case File.stat(path) do
+      {:ok, %{type: :regular, size: size}} when size <= @max_archive_bytes -> :ok
+      {:ok, %{type: :regular}} -> {:error, :backup_too_large}
+      _ -> {:error, :not_readable}
+    end
+  end
+
   @spec create(String.t(), String.t(), String.t()) :: {:ok, String.t()} | {:error, term()}
   def create(output_path, database_path, cover_directory) do
     with {:ok, entries} <- archive_entries(database_path, cover_directory),
+         :ok <-
+           validate_files(
+             Enum.map(entries, fn {name, data} -> {to_string(name), byte_size(data)} end)
+           ),
          {:ok, _archive} <- :zip.create(String.to_charlist(output_path), entries) do
-      {:ok, output_path}
+      case validate_file_size(output_path) do
+        :ok ->
+          {:ok, output_path}
+
+        error ->
+          File.rm(output_path)
+          error
+      end
     end
   end
 
   @spec stage(String.t(), (String.t() -> :ok | {:error, term()})) ::
           {:ok, StagedBackup.t()} | {:error, term()}
   def stage(source_path, validate_database) do
-    with {:ok, table} <- zip_table(source_path),
+    with :ok <- validate_file_size(source_path),
+         {:ok, table} <- zip_table(source_path),
          :ok <- validate_table(table),
          {:ok, files} <- extract(source_path) do
       write_stage(files, validate_database)
@@ -42,43 +69,52 @@ defmodule CiBookTracker.BackupArchive do
   end
 
   defp archive_entries(database_path, cover_directory) do
-    with {:ok, database} <- File.read(database_path),
-         {:ok, covers} <- cover_entries(cover_directory) do
-      {:ok, [{String.to_charlist(@database_entry), database} | covers]}
+    with {:ok, covers} <- cover_paths(cover_directory),
+         sources = [{@database_entry, database_path} | covers],
+         :ok <- validate_source_sizes(sources) do
+      Enum.reduce_while(sources, {:ok, []}, fn {name, path}, {:ok, entries} ->
+        case File.read(path) do
+          {:ok, contents} -> {:cont, {:ok, [{String.to_charlist(name), contents} | entries]}}
+          error -> {:halt, error}
+        end
+      end)
+      |> case do
+        {:ok, entries} -> {:ok, Enum.reverse(entries)}
+        error -> error
+      end
     end
   end
 
-  defp cover_entries(cover_directory) do
-    case File.ls(cover_directory) do
+  # Check sizes before loading the database and covers into memory.
+  defp validate_source_sizes(sources) do
+    Enum.reduce_while(sources, {:ok, []}, fn {name, path}, {:ok, sizes} ->
+      case File.stat(path) do
+        {:ok, %{size: size}} -> {:cont, {:ok, [{name, size} | sizes]}}
+        error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, sizes} -> validate_files(sizes)
+      error -> error
+    end
+  end
+
+  defp cover_paths(directory) do
+    case File.ls(directory) do
       {:ok, filenames} ->
-        filenames
-        |> Enum.sort()
-        |> Enum.reduce_while({:ok, []}, fn filename, {:ok, entries} ->
-          path = Path.join(cover_directory, filename)
+        covers =
+          filenames
+          |> Enum.sort()
+          |> Enum.map(&{"covers/#{Path.basename(&1)}", Path.join(directory, &1)})
+          |> Enum.filter(fn {_name, path} -> File.regular?(path) end)
 
-          if File.regular?(path) do
-            case File.read(path) do
-              {:ok, contents} ->
-                entry_name = String.to_charlist("covers/#{Path.basename(filename)}")
-                {:cont, {:ok, [{entry_name, contents} | entries]}}
-
-              {:error, reason} ->
-                {:halt, {:error, reason}}
-            end
-          else
-            {:cont, {:ok, entries}}
-          end
-        end)
-        |> case do
-          {:ok, entries} -> {:ok, Enum.reverse(entries)}
-          error -> error
-        end
+        {:ok, covers}
 
       {:error, :enoent} ->
         {:ok, []}
 
-      {:error, reason} ->
-        {:error, reason}
+      error ->
+        error
     end
   end
 
@@ -99,6 +135,10 @@ defmodule CiBookTracker.BackupArchive do
           []
       end)
 
+    validate_files(files)
+  end
+
+  defp validate_files(files) do
     names = Enum.map(files, &elem(&1, 0))
     total_size = Enum.sum(Enum.map(files, &elem(&1, 1)))
 

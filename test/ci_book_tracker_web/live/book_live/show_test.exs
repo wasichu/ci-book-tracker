@@ -42,14 +42,21 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
     assert has_element?(view, "#book-details", "108")
     assert has_element?(view, "#book-details", "82.5 thousand")
     assert has_element?(view, "#book-details", "Not set")
+    assert has_element?(view, "#book-notes[hidden]")
+    view |> element("#detail-tab-notes") |> render_click()
+    refute has_element?(view, "#book-notes[hidden]")
     assert has_element?(view, "#book-notes", "Read aloud.")
+    assert has_element?(view, "#book-details[hidden]")
+    view |> element("#detail-tab-manage") |> render_click()
+    refute has_element?(view, "#book-danger-zone[hidden]")
+    view |> element("#detail-tab-details") |> render_click()
     assert has_element?(view, "#back-to-dashboard")
     assert has_element?(view, "#edit-book")
 
     assert has_element?(
              view,
              "#find-metadata[href='/books/#{book.id}/edit?metadata=refresh']",
-             "Refresh Metadata"
+             "Refresh metadata"
            )
 
     assert has_element?(view, "#book-detail-cover .hero-book-open")
@@ -71,7 +78,7 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
     {:ok, view, _html} = live(conn, ~p"/books/#{book.id}/edit?metadata=refresh")
 
     assert has_element?(view, "#metadata-search")
-    assert has_element?(view, "#metadata-search", "Refresh Metadata")
+    assert has_element?(view, "#metadata-search", "Refresh metadata")
 
     assert has_element?(
              view,
@@ -347,7 +354,7 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
     assert path == "/books/#{book.id}"
 
     {:ok, detail, html} = follow_redirect(result, conn)
-    assert html =~ "New title was updated."
+    refute html =~ "New title was updated."
     assert has_element?(detail, "#book-detail", "New title")
     assert has_element?(detail, "#book-details", "1.5 million")
 
@@ -407,19 +414,21 @@ defmodule CiBookTrackerWeb.BookLive.ShowTest do
     assert {:error, {:live_redirect, %{to: "/dashboard"}}} = result
 
     {:ok, dashboard, html} = follow_redirect(result, conn)
-    assert html =~ "Finished book was deleted."
+    refute html =~ "Finished book was deleted."
     assert has_element?(dashboard, "#summary-books-finished", "0")
     assert has_element?(dashboard, "#words-completed", "0")
-    refute has_element?(dashboard, "#book-#{book.id}")
+    refute has_element?(dashboard, "#books-#{book.id}")
     assert {:error, _error} = Library.get_book(book.id)
   end
 
-  test "dashboard book titles navigate to detail", %{conn: conn} do
+  test "dashboard book titles select the cover inspector", %{conn: conn} do
     reading_log = Library.create_reading_log!("French", "fr", nil)
     book = Library.add_book!(reading_log.id, "Clickable")
     {:ok, dashboard, _html} = live(activate(conn, reading_log), ~p"/dashboard")
 
-    assert has_element?(dashboard, "#book-#{book.id} a[href='/books/#{book.id}']", "Clickable")
+    dashboard |> element("#select-book-#{book.id}") |> render_click()
+    assert has_element?(dashboard, "#inspector-book-title", "Clickable")
+    assert has_element?(dashboard, "#inspector-full-details[href='/books/#{book.id}']")
   end
 
   defp activate(conn, reading_log) do

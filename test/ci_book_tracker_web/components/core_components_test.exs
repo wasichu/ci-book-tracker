@@ -4,16 +4,17 @@ defmodule CiBookTrackerWeb.CoreComponentsTest do
   import Phoenix.LiveViewTest
 
   alias CiBookTrackerWeb.CoreComponents
+  alias CiBookTrackerWeb.Layouts
 
-  test "info flashes opt into automatic dismissal" do
+  test "routine info flashes are not displayed by the app layout" do
     html =
-      render_component(&CoreComponents.flash/1,
-        kind: :info,
+      render_component(&Layouts.flash_group/1,
         flash: %{"info" => "Saved."}
       )
 
-    assert html =~ ~s(phx-hook="AutoDismissFlash")
-    assert html =~ "transition-opacity duration-200"
+    refute html =~ "Saved."
+    refute html =~ "flash-info"
+    refute html =~ "AutoDismissFlash"
   end
 
   test "error flashes remain until manually dismissed" do
@@ -25,5 +26,14 @@ defmodule CiBookTrackerWeb.CoreComponentsTest do
 
     refute html =~ "AutoDismissFlash"
     assert html =~ "Try again."
+    assert html =~ "workspace-notice"
+    assert html =~ "Dismiss error"
+    refute html =~ "fixed"
+  end
+
+  test "the layout still displays actionable errors" do
+    html = render_component(&Layouts.flash_group/1, flash: %{"error" => "Backup exceeds 250 MB."})
+    assert html =~ "Backup exceeds 250 MB."
+    assert html =~ ~s(role="alert")
   end
 end

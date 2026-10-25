@@ -24,35 +24,7 @@ import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/ci_book_tracker"
 import topbar from "../vendor/topbar"
-
-const AutoDismissFlash = {
-  mounted() {
-    this.scheduleDismiss()
-  },
-
-  updated() {
-    this.el.classList.remove("opacity-0")
-    this.scheduleDismiss()
-  },
-
-  destroyed() {
-    this.clearTimers()
-  },
-
-  scheduleDismiss() {
-    this.clearTimers()
-
-    this.dismissTimer = window.setTimeout(() => {
-      this.el.classList.add("opacity-0")
-      this.removeTimer = window.setTimeout(() => this.el.click(), 200)
-    }, 5000)
-  },
-
-  clearTimers() {
-    window.clearTimeout(this.dismissTimer)
-    window.clearTimeout(this.removeTimer)
-  },
-}
+import {Workspace, BookViewport} from "./workspace"
 
 const ClipboardCopy = {
   mounted() {
@@ -111,11 +83,11 @@ const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, AutoDismissFlash, ClipboardCopy},
+  hooks: {...colocatedHooks, ClipboardCopy, Workspace, BookViewport},
 })
 
 // Show progress bar on live navigation and form submits
-topbar.config({barColors: {0: "#d97706"}, shadowColor: "rgba(15, 23, 42, .2)"})
+topbar.config({barColors: {0: "#7779bc"}, shadowColor: "rgba(44, 52, 80, .15)"})
 window.addEventListener("phx:page-loading-start", _info => topbar.show(300))
 window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
 

@@ -1,0 +1,85 @@
+<Layouts.app flash={@flash} workspace={@workspace}>
+  <section id="database-backup" class="workspace-backup-panels">
+    <header class="workspace-editor-heading">
+      <p class="workspace-eyebrow">Your library, on your terms</p>
+      <h1>Backup and restore</h1>
+      <p class="workspace-muted mt-2">Keep a portable copy of your reading logs and cover art.</p>
+    </header>
+    <nav class="workspace-tabs" aria-label="Backup options">
+      <button
+        id="backup-tab-export"
+        type="button"
+        phx-click="backup_tab"
+        phx-value-tab="export"
+        aria-pressed={to_string(@backup_tab == "export")}
+        class={[@backup_tab == "export" && "is-active"]}
+      >Export backup</button>
+      <button
+        id="backup-tab-restore"
+        type="button"
+        phx-click="backup_tab"
+        phx-value-tab="restore"
+        aria-pressed={to_string(@backup_tab == "restore")}
+        class={[@backup_tab == "restore" && "is-active"]}
+      >Restore backup</button>
+    </nav>
+    <section
+      id="backup-export-panel"
+      hidden={@backup_tab != "export"}
+      class="workspace-backup-panel"
+    >
+      <h2 class="text-lg font-medium">Take your library with you.</h2>
+      <p class="workspace-muted text-sm mt-3 leading-6">
+        Download a ZIP archive containing the complete SQLite database and locally stored cover art.
+      </p>
+      <dl class="workspace-backup-summary">
+        <dt>Reading logs, books, and settings</dt><dd class="workspace-backup-included">
+          <span class="sr-only">Included</span>
+          <.icon name="hero-check" class="size-4" />
+        </dd><dt>Locally stored covers</dt><dd class="workspace-backup-included">
+          <span class="sr-only">Included</span><.icon name="hero-check" class="size-4" />
+        </dd>
+      </dl>
+      <.link
+        id="export-database"
+        href={~p"/backup/database"}
+        download
+        class="workspace-button mt-6"
+      ><.icon name="hero-arrow-down-tray" class="size-4" /> Export backup</.link>
+      <p class="workspace-muted text-xs mt-4 leading-5">
+        Store the downloaded file somewhere separate from this device.
+      </p>
+    </section>
+    <section
+      id="backup-restore-panel"
+      hidden={@backup_tab != "restore"}
+      class="workspace-backup-panel"
+    >
+      <h2 class="text-lg font-medium">Restore your reading history.</h2>
+      <p class="workspace-muted text-sm mt-3 leading-6">
+        Choose a previously exported ZIP backup or an older SQLite backup. The app automatically checks that the file is readable and compatible before you can restore it.
+      </p>
+      <aside
+        id="restore-warning"
+        class="workspace-restore-warning"
+        aria-labelledby="restore-warning-title"
+      >
+        <.icon name="hero-exclamation-triangle" class="size-5 shrink-0 mt-0.5" />
+        <div class="min-w-0">
+          <h3 id="restore-warning-title" class="font-semibold">
+            Restoring replaces your current data.
+          </h3>
+          <p class="mt-2">
+            Before restoring, the app saves a ZIP copy of your current database and cover images. You can restore that copy later.
+          </p>
+          <p class="mt-3 text-xs font-medium">Automatic backup folder</p>
+          <code id="restore-backup-directory" class="mt-1 block break-all text-xs leading-6">{@backup_directory}</code>
+        </div>
+      </aside>
+      <.link id="import-backup" navigate={~p"/settings/restore"} class="workspace-button mt-6"><.icon
+        name="hero-arrow-up-tray"
+        class="size-4"
+      /> Choose a backup</.link>
+    </section>
+  </section>
+</Layouts.app>

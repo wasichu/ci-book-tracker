@@ -11,500 +11,145 @@ defmodule CiBookTrackerWeb.DashboardLive do
     ReadingLogSession
   }
 
-  @status_groups [
-    {:in_progress, "In progress", "hero-book-open", "bg-sky-100 text-sky-800"},
-    {:want_to_read, "Want to read", "hero-bookmark", "bg-amber-100 text-amber-800"},
-    {:finished, "Finished", "hero-check-circle", "bg-emerald-100 text-emerald-800"},
-    {:abandoned, "Abandoned", "hero-archive-box", "bg-slate-200 text-slate-700"}
-  ]
-
   @status_filters [
-    {:all, "All"},
-    {:want_to_read, "Want to Read"},
-    {:in_progress, "In Progress"},
-    {:finished, "Finished"},
-    {:abandoned, "Abandoned"}
+    all: "All",
+    in_progress: "Reading",
+    want_to_read: "Queued",
+    finished: "Finished",
+    abandoned: "Abandoned"
   ]
 
   @impl true
   def mount(_params, session, socket) do
-    reading_log = ReadingLogSession.resolve_or_nil(session)
+    case ReadingLogSession.resolve_or_nil(session) do
+      nil ->
+        {:ok,
+         socket
+         |> put_flash(:info, "Choose a reading log to continue.")
+         |> push_navigate(to: ~p"/")}
 
-    if reading_log do
-      {:ok,
-       socket
-       |> assign(:page_title, reading_log.name)
-       |> assign(:search_query, "")
-       |> assign(:status_filter, :all)
-       |> assign(:difficulty_filter, :all)
-       |> assign_dashboard(reading_log)}
-    else
-      {:ok,
-       socket
-       |> put_flash(:info, "Choose a reading log to continue.")
-       |> push_navigate(to: ~p"/")}
+      reading_log ->
+        {:ok,
+         socket
+         |> assign(:page_title, reading_log.name)
+         |> assign(:search_query, "")
+         |> assign(:search_form, to_form(%{"query" => ""}, as: :search))
+         |> assign(:status_filter, :all)
+         |> assign(:difficulty_filter, :all)
+         |> assign(:page_index, 0)
+         |> assign(:page_size, 4)
+         |> assign(:selected_book, nil)
+         |> assign(:inspector_open?, true)
+         |> assign(:inspector_tab, "details")
+         |> assign(:progress_open?, false)
+         |> assign(:status_filters, @status_filters)
+         |> assign_dashboard(reading_log)}
     end
+  end
+
+  @impl true
+  def handle_params(params, _uri, socket) do
+    socket = assign(socket, :progress_open?, params["view"] == "progress")
+
+    socket =
+      case Enum.find(socket.assigns.all_books, &(&1.id == params["book"])) do
+        nil ->
+          socket
+
+        book ->
+          index = Enum.find_index(socket.assigns.all_books, &(&1.id == book.id))
+
+          socket
+          |> assign(
+            selected_book: book,
+            inspector_open?: true,
+            page_index: div(index, socket.assigns.page_size)
+          )
+          |> apply_book_filters()
+      end
+
+    {:noreply, socket}
   end
 
   @impl true
   def handle_event("search_books", %{"search" => %{"query" => query}}, socket) do
     {:noreply,
      socket
-     |> assign(:search_query, String.trim(query))
-     |> apply_book_filters()}
-  end
-
-  def handle_event("filter_books", %{"status" => status}, socket) do
-    {:noreply,
-     socket
-     |> assign(:status_filter, parse_status_filter(status))
-     |> apply_book_filters()}
-  end
-
-  def handle_event("filter_difficulty", %{"difficulty" => difficulty}, socket) do
-    {:noreply,
-     socket
      |> assign(
-       :difficulty_filter,
-       DashboardData.resolve_difficulty(difficulty, socket.assigns.difficulty_options)
+       search_query: String.trim(query),
+       search_form: to_form(%{"query" => query}, as: :search),
+       page_index: 0
      )
      |> apply_book_filters()}
   end
 
-  @impl true
-  def handle_event(
-        "update_status",
-        %{"action" => action, "book_id" => book_id},
-        socket
-      )
-      when action in ~w(start finish abandon reopen) do
-    with %{} = book <- find_book(socket.assigns.books_by_status, book_id),
-         {:ok, updated_book} <- update_book_status(book, action) do
-      {:noreply,
-       socket
-       |> put_flash(:info, BookFormat.status_message(updated_book, action))
-       |> assign_dashboard(socket.assigns.reading_log)}
-    else
-      _error ->
-        {:noreply, put_flash(socket, :error, "We couldn't update this book. Try again.")}
+  def handle_event("filter_books", %{"status" => status}, socket) do
+    status =
+      Enum.find_value(@status_filters, :all, fn {key, _} ->
+        if Atom.to_string(key) == status, do: key
+      end)
+
+    {:noreply, socket |> assign(status_filter: status, page_index: 0) |> apply_book_filters()}
+  end
+
+  def handle_event("filter_difficulty", %{"difficulty" => difficulty}, socket) do
+    difficulty = DashboardData.resolve_difficulty(difficulty, socket.assigns.difficulty_options)
+
+    {:noreply,
+     socket |> assign(difficulty_filter: difficulty, page_index: 0) |> apply_book_filters()}
+  end
+
+  def handle_event("select_book", %{"id" => id}, socket) do
+    case Enum.find(socket.assigns.all_books, &(&1.id == id)) do
+      nil ->
+        {:noreply, socket}
+
+      book ->
+        {:noreply,
+         socket
+         |> assign(selected_book: book, inspector_open?: true, inspector_tab: "details")
+         |> apply_book_filters()}
     end
   end
 
-  @impl true
-  def render(assigns) do
-    ~H"""
-    <Layouts.app flash={@flash}>
-      <section id="dashboard" class="space-y-8">
-        <header class="space-y-4">
-          <div class="flex items-center justify-between gap-4">
-            <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
-              <span>{ReadingLogFormat.language_name(@reading_log.language_code)}</span>
-              <span aria-hidden="true" class="size-1 rounded-full bg-amber-400"></span>
-              <span>Reading dashboard</span>
-            </div>
-            <div class="flex flex-wrap items-center justify-end gap-1">
-              <.link
-                id="edit-reading-log"
-                navigate={~p"/reading-logs/#{@reading_log.id}/edit?from=dashboard"}
-                class="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-slate-600 transition hover:bg-white hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
-              >
-                <.icon name="hero-cog-6-tooth" class="size-4" /> Log Settings
-              </.link>
-              <.link
-                id="dashboard-export-database"
-                href={~p"/backup/database"}
-                class="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-slate-600 transition hover:bg-white hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
-              >
-                <.icon name="hero-arrow-down-tray" class="size-4" /> Export Backup
-              </.link>
-              <.link
-                id="switch-reading-log"
-                href={~p"/reading-log-session"}
-                method="delete"
-                class="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-slate-600 transition hover:bg-white hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
-              >
-                <.icon name="hero-arrows-right-left" class="size-4" /> Switch Log
-              </.link>
-            </div>
-          </div>
-          <h1 class="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-            {@reading_log.name}
-          </h1>
-          <p :if={is_nil(@reading_log.word_goal)} class="text-base leading-7 text-slate-600">
-            Build your reading habit one book at a time.
-          </p>
-        </header>
-
-        <div id="summary-cards" class="space-y-3">
-          <.summary_card
-            :if={@reading_log.word_goal}
-            id="word-goal-card"
-            label="Goal"
-            value={ReadingLogFormat.format_word_goal(@reading_log.word_goal)}
-            icon="hero-chat-bubble-bottom-center-text"
-            icon_class="bg-amber-100 text-amber-800"
-          />
-          <.summary_card
-            id="summary-books-finished"
-            label="Books finished"
-            value={@summary.books_finished}
-            icon="hero-check-circle"
-            icon_class="bg-emerald-100 text-emerald-800"
-          />
-          <.summary_card
-            id="words-completed"
-            label="Words completed"
-            value={BookFormat.number(@summary.words_completed)}
-            icon="hero-document-text"
-            icon_class="bg-violet-100 text-violet-800"
-          />
-          <.summary_card
-            id="summary-books-in-progress"
-            label="Books in progress"
-            value={@summary.books_in_progress}
-            icon="hero-book-open"
-            icon_class="bg-sky-100 text-sky-800"
-          />
-          <.summary_card
-            :if={@summary.books_in_progress > 0}
-            id="summary-progress-volume"
-            label={in_progress_label(@summary)}
-            value={in_progress_value(@summary)}
-            icon="hero-bars-3-bottom-left"
-            icon_class="bg-indigo-100 text-indigo-800"
-          />
-          <article
-            :if={@reading_log.word_goal}
-            id="goal-progress"
-            class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/50"
-          >
-            <div class="flex items-center gap-4">
-              <div class="grid size-11 shrink-0 place-items-center rounded-2xl bg-amber-100 text-amber-800">
-                <.icon name="hero-chart-bar" class="size-5" />
-              </div>
-              <div class="min-w-0 flex-1">
-                <div class="flex items-end justify-between gap-4">
-                  <p class="text-sm font-medium text-slate-600">Goal progress</p>
-                  <p class="text-2xl font-semibold tracking-tight text-slate-950">
-                    {@summary.goal_progress}%
-                  </p>
-                </div>
-                <div
-                  class="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-100"
-                  role="progressbar"
-                  aria-label="Reading goal progress"
-                  aria-valuemin="0"
-                  aria-valuemax="100"
-                  aria-valuenow={@summary.goal_progress}
-                >
-                  <div
-                    class="h-full rounded-full bg-amber-600 transition-[width] duration-500"
-                    style={"width: #{min(@summary.goal_progress, 100)}%"}
-                  >
-                  </div>
-                </div>
-              </div>
-            </div>
-          </article>
-        </div>
-
-        <.button
-          id="add-book"
-          navigate={~p"/books/new"}
-          variant="primary"
-          class="flex min-h-16 w-full items-center justify-center gap-3 rounded-2xl bg-slate-950 px-6 text-base font-semibold text-white shadow-lg shadow-slate-900/15 transition hover:-translate-y-0.5 hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0"
-        >
-          <.icon name="hero-plus" class="size-5" /> Add Book
-        </.button>
-
-        <.link
-          id="import-books"
-          navigate={~p"/books/import"}
-          class="flex min-h-14 w-full items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-white px-6 font-semibold text-slate-800 shadow-sm transition hover:-translate-y-0.5 hover:border-amber-400 hover:bg-amber-50 hover:text-amber-950 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0"
-        >
-          <.icon name="hero-document-arrow-up" class="size-5" /> Import CSV
-        </.link>
-
-        <div id="book-groups" class="space-y-7">
-          <div>
-            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
-              Your books
-            </p>
-            <h2 class="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
-              Reading log
-            </h2>
-          </div>
-
-          <div
-            id="book-filters"
-            class="space-y-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/50 sm:p-5"
-          >
-            <.form
-              for={to_form(%{"query" => @search_query}, as: :search)}
-              id="book-search-form"
-              phx-change="search_books"
-            >
-              <.input
-                field={to_form(%{"query" => @search_query}, as: :search)[:query]}
-                type="search"
-                label="Search your books"
-                placeholder="Search by title or author"
-                autocomplete="off"
-                phx-debounce="250"
-              />
-            </.form>
-
-            <div>
-              <p class="text-sm font-semibold text-slate-700">Filter by status</p>
-              <div class="mt-3 flex flex-wrap gap-2" aria-label="Filter books by status">
-                <button
-                  :for={{status, label} <- @status_filters}
-                  id={"filter-#{status}"}
-                  type="button"
-                  phx-click="filter_books"
-                  phx-value-status={status}
-                  aria-pressed={@status_filter == status}
-                  class={[
-                    "inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2",
-                    @status_filter == status &&
-                      "bg-slate-950 text-white shadow-sm",
-                    @status_filter != status &&
-                      "bg-slate-100 text-slate-700 hover:bg-amber-100 hover:text-amber-950"
-                  ]}
-                >
-                  {label}
-                </button>
-              </div>
-            </div>
-
-            <div :if={@difficulty_options != []}>
-              <p class="text-sm font-semibold text-slate-700">Filter by difficulty</p>
-              <div class="mt-3 flex flex-wrap gap-2" aria-label="Filter books by difficulty">
-                <button
-                  id="filter-difficulty-all"
-                  type="button"
-                  phx-click="filter_difficulty"
-                  phx-value-difficulty="all"
-                  aria-pressed={@difficulty_filter == :all}
-                  class={[
-                    "inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2",
-                    @difficulty_filter == :all && "bg-slate-950 text-white shadow-sm",
-                    @difficulty_filter != :all &&
-                      "bg-slate-100 text-slate-700 hover:bg-amber-100 hover:text-amber-950"
-                  ]}
-                >
-                  All difficulties
-                </button>
-                <button
-                  :for={{difficulty, index} <- Enum.with_index(@difficulty_options)}
-                  id={"filter-difficulty-#{index}"}
-                  type="button"
-                  phx-click="filter_difficulty"
-                  phx-value-difficulty={difficulty}
-                  aria-pressed={@difficulty_filter == difficulty}
-                  class={[
-                    "inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2",
-                    @difficulty_filter == difficulty && "bg-slate-950 text-white shadow-sm",
-                    @difficulty_filter != difficulty &&
-                      "bg-slate-100 text-slate-700 hover:bg-amber-100 hover:text-amber-950"
-                  ]}
-                >
-                  {difficulty}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div
-            :if={@filtering? && @matching_book_count == 0}
-            id="no-matching-books"
-            class="rounded-3xl border border-dashed border-slate-300 bg-white px-5 py-10 text-center"
-          >
-            <span class="mx-auto grid size-11 place-items-center rounded-2xl bg-slate-100 text-slate-500">
-              <.icon name="hero-magnifying-glass" class="size-5" />
-            </span>
-            <p class="mt-3 font-semibold text-slate-800">No books match this search.</p>
-            <p class="mt-1 text-sm text-slate-500">
-              Try another title, author, status, or difficulty.
-            </p>
-          </div>
-
-          <section
-            :for={{status, label, icon, icon_class} <- @status_groups}
-            :if={!@filtering? || @books_by_status[status] != []}
-            id={"books-#{status}"}
-            class="space-y-3"
-          >
-            <div class="flex items-center justify-between gap-4">
-              <div class="flex items-center gap-3">
-                <span class={["grid size-9 place-items-center rounded-xl", icon_class]}>
-                  <.icon name={icon} class="size-4" />
-                </span>
-                <h3 class="font-semibold text-slate-900">{label}</h3>
-              </div>
-              <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-                {length(@books_by_status[status])}
-              </span>
-            </div>
-
-            <div
-              :if={@books_by_status[status] == []}
-              class="rounded-2xl border border-dashed border-slate-300 px-5 py-6 text-center"
-            >
-              <p class="text-sm text-slate-500">No books here yet.</p>
-            </div>
-
-            <div :if={@books_by_status[status] != []} class="space-y-3">
-              <.book_card :for={book <- @books_by_status[status]} book={book} />
-            </div>
-          </section>
-        </div>
-      </section>
-    </Layouts.app>
-    """
+  def handle_event("inspector_tab", %{"tab" => tab}, socket)
+      when tab in ~w(details notes metadata) do
+    {:noreply, assign(socket, :inspector_tab, tab)}
   end
 
-  attr :id, :string, required: true
-  attr :label, :string, required: true
-  attr :value, :any, required: true
-  attr :detail, :string, default: nil
-  attr :icon, :string, required: true
-  attr :icon_class, :string, required: true
+  def handle_event("toggle_inspector", _params, socket),
+    do: {:noreply, assign(socket, :inspector_open?, !socket.assigns.inspector_open?)}
 
-  defp summary_card(assigns) do
-    ~H"""
-    <article
-      id={@id}
-      class="flex items-center gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/50"
-    >
-      <div class={["grid size-11 shrink-0 place-items-center rounded-2xl", @icon_class]}>
-        <.icon name={@icon} class="size-5" />
-      </div>
-      <div>
-        <p class="text-sm font-medium text-slate-600">{@label}</p>
-        <div class="mt-0.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <p class="text-2xl font-semibold tracking-tight text-slate-950">{@value}</p>
-          <p :if={@detail} class="text-sm font-medium text-slate-500">{@detail}</p>
-        </div>
-      </div>
-    </article>
-    """
+  def handle_event("close_inspector", _params, socket),
+    do: {:noreply, assign(socket, :inspector_open?, false)}
+
+  def handle_event("paginate", %{"direction" => direction}, socket)
+      when direction in ~w(previous next) do
+    offset = if direction == "next", do: 1, else: -1
+
+    {:noreply,
+     socket |> assign(:page_index, socket.assigns.page_index + offset) |> apply_book_filters()}
   end
 
-  attr :book, CiBookTracker.Library.Book, required: true
-
-  defp book_card(assigns) do
-    ~H"""
-    <article
-      id={"book-#{@book.id}"}
-      class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/50 transition hover:border-amber-300 hover:shadow-md"
-    >
-      <div class="flex gap-4">
-        <.link
-          navigate={~p"/books/#{@book.id}"}
-          aria-label={"View #{@book.title}"}
-          class="rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
-        >
-          <.book_cover
-            id={"book-#{@book.id}-cover"}
-            title={@book.title}
-            cover_path={@book.cover_path}
-            cover_url={@book.cover_url}
-            cover_provider={@book.cover_provider}
-            cover_id={@book.cover_id}
-          />
-        </.link>
-
-        <div class="min-w-0 flex-1">
-          <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0">
-              <h4 class="font-semibold leading-6 text-slate-950">
-                <.link
-                  navigate={~p"/books/#{@book.id}"}
-                  class="rounded-sm transition hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
-                >
-                  {@book.title}
-                </.link>
-              </h4>
-              <p :if={@book.author} class="mt-1 text-sm text-slate-500">{@book.author}</p>
-            </div>
-            <div class="flex shrink-0 items-center gap-2">
-              <span
-                :if={@book.difficulty_label}
-                class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800"
-              >
-                {@book.difficulty_label}
-              </span>
-              <.link
-                id={"book-#{@book.id}-edit"}
-                navigate={~p"/books/#{@book.id}/edit"}
-                aria-label={"Edit #{@book.title}"}
-                class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-slate-500 transition hover:bg-amber-50 hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
-              >
-                <.icon name="hero-pencil-square" class="size-4" /> Edit
-              </.link>
-            </div>
-          </div>
-
-          <div
-            :if={@book.page_count || @book.estimated_words}
-            class="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-t border-slate-100 pt-4 text-xs font-medium text-slate-500"
-          >
-            <span :if={@book.page_count} class="flex items-center gap-1.5">
-              <.icon name="hero-document" class="size-4" />
-              {@book.page_count} pages
-            </span>
-            <span :if={@book.estimated_words} class="flex items-center gap-1.5">
-              <.icon name="hero-bars-3-bottom-left" class="size-4" />
-              {BookFormat.number(@book.estimated_words)} words
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <div
-        class="mt-5 grid grid-cols-2 gap-2 border-t border-slate-100 pt-4"
-        aria-label={"Status actions for #{@book.title}"}
-      >
-        <button
-          :for={{action, layout_class} <- status_actions(@book.status)}
-          id={"book-#{@book.id}-#{action}"}
-          type="button"
-          phx-click="update_status"
-          phx-value-action={action}
-          phx-value-book_id={@book.id}
-          phx-disable-with={"#{BookActions.label(action)}..."}
-          class={[
-            "inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60",
-            BookActions.class(action),
-            layout_class
-          ]}
-        >
-          <.icon name={BookActions.icon(action)} class="size-4" /> {BookActions.label(action)}
-        </button>
-      </div>
-    </article>
-    """
+  def handle_event("resize_books", %{"rows" => rows}, socket) when is_integer(rows) do
+    rows = min(max(rows, 1), 30)
+    # Keep the same first visible book when the viewport changes size.
+    index = div(socket.assigns.page_index * socket.assigns.page_size, rows)
+    {:noreply, socket |> assign(page_size: rows, page_index: index) |> apply_book_filters()}
   end
 
-  defp status_actions(:want_to_read), do: [{"start", nil}, {"finish", nil}]
-  defp status_actions(:in_progress), do: [{"finish", nil}, {"abandon", nil}]
-
-  defp status_actions(status) when status in [:finished, :abandoned],
-    do: [{"reopen", "col-span-2"}]
-
-  defp assign_dashboard(socket, nil) do
-    assign(socket,
-      reading_log: nil,
-      all_books: [],
-      books_by_status: empty_books_by_status(),
-      status_groups: @status_groups,
-      status_filters: @status_filters,
-      difficulty_options: [],
-      filtering?: false,
-      matching_book_count: 0,
-      summary: DashboardData.summarize([], nil)
-    )
+  def handle_event("update_status", %{"action" => action, "book_id" => id}, socket)
+      when action in ~w(start finish abandon reopen) do
+    with %{} = book <- Enum.find(socket.assigns.all_books, &(&1.id == id)),
+         {:ok, updated_book} <- update_book_status(book, action) do
+      {:noreply,
+       socket
+       |> assign(:selected_book, updated_book)
+       |> put_flash(:info, BookFormat.status_message(updated_book, action))
+       |> assign_dashboard(socket.assigns.reading_log)}
+    else
+      _ -> {:noreply, put_flash(socket, :error, "We couldn't update this book. Try again.")}
+    end
   end
 
   defp assign_dashboard(socket, reading_log) do
@@ -515,66 +160,63 @@ defmodule CiBookTrackerWeb.DashboardLive do
           sort: [added_on: :desc, inserted_at: :desc]
         ]
       )
+      |> Enum.sort_by(&status_rank(&1.status))
 
     socket
     |> assign(
       reading_log: reading_log,
       all_books: books,
-      status_groups: @status_groups,
-      status_filters: @status_filters,
       difficulty_options: DashboardData.difficulty_options(books),
-      summary: DashboardData.summarize(books, reading_log.word_goal)
+      summary: DashboardData.summarize(books, reading_log.word_goal),
+      status_counts: Enum.frequencies_by(books, & &1.status)
     )
     |> apply_book_filters()
   end
 
-  defp in_progress_label(%{words_in_progress: words}) when words > 0, do: "Words in progress"
-  defp in_progress_label(%{pages_in_progress: pages}) when pages > 0, do: "Pages in progress"
-  defp in_progress_label(_summary), do: "Reading volume"
-
-  defp in_progress_value(%{words_in_progress: words}) when words > 0,
-    do: BookFormat.number(words)
-
-  defp in_progress_value(%{pages_in_progress: pages}) when pages > 0,
-    do: BookFormat.number(pages)
-
-  defp in_progress_value(_summary), do: "Not set"
-
-  defp empty_books_by_status do
-    Map.new(@status_groups, fn {status, _label, _icon, _class} -> {status, []} end)
-  end
-
-  defp find_book(books_by_status, book_id) do
-    books_by_status
-    |> Map.values()
-    |> List.flatten()
-    |> Enum.find(&(&1.id == book_id))
-  end
-
   defp apply_book_filters(socket) do
-    query = socket.assigns.search_query |> String.downcase()
-    status_filter = socket.assigns.status_filter
-    difficulty_filter = socket.assigns.difficulty_filter
-
     books =
-      DashboardData.filter(socket.assigns.all_books, query, status_filter, difficulty_filter)
+      DashboardData.filter(
+        socket.assigns.all_books,
+        socket.assigns.search_query,
+        socket.assigns.status_filter,
+        socket.assigns.difficulty_filter
+      )
 
-    assign(socket,
-      books_by_status:
-        Map.merge(empty_books_by_status(), Enum.group_by(books, & &1.status, & &1)),
-      filtering?: query != "" || status_filter != :all || difficulty_filter != :all,
-      matching_book_count: length(books)
+    count = length(books)
+    pages = max(ceil(count / socket.assigns.page_size), 1)
+    index = socket.assigns.page_index |> max(0) |> min(pages - 1)
+    page = Enum.slice(books, index * socket.assigns.page_size, socket.assigns.page_size)
+    selected_id = socket.assigns.selected_book && socket.assigns.selected_book.id
+    selected = Enum.find(page, &(&1.id == selected_id)) || List.first(page)
+
+    socket
+    |> assign(
+      page_index: index,
+      page_count: pages,
+      matching_book_count: count,
+      selected_book: selected,
+      first_book_index: if(count == 0, do: 0, else: index * socket.assigns.page_size + 1),
+      last_book_index: min((index + 1) * socket.assigns.page_size, count),
+      filtering?:
+        socket.assigns.search_query != "" || socket.assigns.status_filter != :all ||
+          socket.assigns.difficulty_filter != :all
     )
+    |> stream(:books, page, reset: true)
   end
 
-  defp parse_status_filter("want_to_read"), do: :want_to_read
-  defp parse_status_filter("in_progress"), do: :in_progress
-  defp parse_status_filter("finished"), do: :finished
-  defp parse_status_filter("abandoned"), do: :abandoned
-  defp parse_status_filter(_status), do: :all
-
+  defp status_rank(:in_progress), do: 0
+  defp status_rank(:want_to_read), do: 1
+  defp status_rank(:finished), do: 2
+  defp status_rank(:abandoned), do: 3
+  defp status_actions(:want_to_read), do: ~w(start finish)
+  defp status_actions(:in_progress), do: ~w(finish abandon)
+  defp status_actions(_), do: ~w(reopen)
   defp update_book_status(book, "start"), do: Library.start_book(book)
   defp update_book_status(book, "finish"), do: Library.finish_book(book)
   defp update_book_status(book, "abandon"), do: Library.abandon_book(book)
   defp update_book_status(book, "reopen"), do: Library.reopen_book(book)
+  defp display_date(nil), do: "—"
+  defp display_date(date), do: Calendar.strftime(date, "%b %-d, %Y")
+  defp display_number(nil), do: "—"
+  defp display_number(number), do: BookFormat.number(number)
 end

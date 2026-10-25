@@ -5,8 +5,10 @@ defmodule CiBookTrackerWeb.HomeLive do
   alias CiBookTrackerWeb.ReadingLogFormat
 
   @impl true
-  def mount(_params, session, socket) do
-    case auto_open_reading_log(session) do
+  def mount(params, session, socket) do
+    auto_open = if params["logs"] == "all", do: :disabled, else: auto_open_reading_log(session)
+
+    case auto_open do
       {:ok, _reading_log} ->
         {:ok, push_navigate(socket, to: ~p"/dashboard")}
 
@@ -34,118 +36,97 @@ defmodule CiBookTrackerWeb.HomeLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
-      <section id="reading-log-selector" class="space-y-8">
-        <section id="new-reading-log" class="space-y-3">
-          <header>
-            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
-              Start Tracking
-            </p>
-            <h2 class="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
-              Create a new reading log
-            </h2>
-            <p class="mt-2 text-sm leading-6 text-slate-600">
-              Start tracking extensive reading in another language and optionally set a word goal.
-            </p>
-          </header>
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <.button
-              id="create-reading-log"
-              navigate={~p"/reading-logs/new"}
-              variant="primary"
-              class="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-amber-700 px-5 text-sm font-semibold text-white shadow-sm shadow-amber-900/15 transition hover:-translate-y-0.5 hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0 sm:w-auto"
-            >
-              <.icon name="hero-plus" class="size-4" /> Create New Reading Log
-            </.button>
-            <.link
-              id="restore-backup"
-              navigate={~p"/settings/restore"}
-              class="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0 sm:w-auto"
-            >
-              <.icon name="hero-arrow-up-tray" class="size-4" /> Restore from Backup
-            </.link>
+    <Layouts.app flash={@flash} workspace={@workspace}>
+      <section id="reading-log-selector" class="log-selector">
+        <header class="log-selector-heading">
+          <p class="workspace-eyebrow">Your workspace</p>
+          <h1>Reading logs</h1>
+          <p class="workspace-muted">Choose a language, pick up a book, and keep going.</p>
+        </header>
+
+        <section id="existing-reading-logs">
+          <div class="log-section-heading">
+            <h2>Continue reading</h2>
+            <span class="workspace-muted">{length(@reading_logs)} logs</span>
           </div>
-        </section>
-
-        <section id="existing-reading-logs" class="space-y-4">
-          <header>
-            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
-              Continue Tracking
-            </p>
-            <h2 class="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
-              Existing reading logs
-            </h2>
-            <p class="mt-2 text-sm leading-6 text-slate-600">
-              Open a log to view and continue tracking books and reading progress.
-            </p>
-          </header>
-
-          <div
-            :if={@reading_logs == []}
-            id="empty-reading-logs"
-            class="rounded-3xl border border-dashed border-slate-300 px-6 py-10 text-center"
-          >
-            <p class="font-semibold text-slate-900">No reading logs yet</p>
-            <p class="mt-2 text-sm leading-6 text-slate-500">
+          <div :if={@reading_logs == []} id="empty-reading-logs" class="log-empty">
+            <p>No reading logs yet</p>
+            <p class="workspace-muted">
               Create your first log to start tracking books and reading goals.
             </p>
           </div>
-
-          <div :if={@reading_logs != []} id="reading-log-list" class="space-y-4">
+          <div :if={@reading_logs != []} id="reading-log-list" class="log-list">
             <article
               :for={reading_log <- @reading_logs}
               id={"reading-log-#{reading_log.id}"}
-              class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/50 transition hover:border-amber-300 hover:shadow-md sm:p-6"
+              class="log-row"
             >
-              <div class="flex items-start gap-4">
-                <div class="grid size-12 shrink-0 place-items-center rounded-2xl bg-amber-100 text-amber-800">
-                  <.icon name="hero-book-open" class="size-5" />
-                </div>
-                <div class="min-w-0 flex-1">
-                  <p class="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">
-                    {ReadingLogFormat.language_name(reading_log.language_code)}
-                    <span class="normal-case tracking-normal text-amber-700/70">
-                      ({reading_log.language_code})
-                    </span>
-                  </p>
-                  <h3 class="mt-1 text-xl font-semibold tracking-tight text-slate-950">
-                    {reading_log.name}
-                  </h3>
-                  <p :if={reading_log.word_goal} class="mt-2 text-sm text-slate-500">
+              <span class="log-language-badge" aria-hidden="true">{String.upcase(
+                reading_log.language_code
+              )}</span>
+              <div class="log-row-description">
+                <h3>{reading_log.name}</h3>
+                <p class="workspace-muted">
+                  {ReadingLogFormat.language_name(reading_log.language_code)} ({reading_log.language_code})
+                  <span aria-hidden="true" class="mx-2">·</span>
+                  <%= if reading_log.word_goal do %>
                     Goal: {ReadingLogFormat.format_word_goal(reading_log.word_goal)}
-                  </p>
-                  <p :if={is_nil(reading_log.word_goal)} class="mt-2 text-sm text-slate-500">
+                  <% else %>
                     No word goal set
-                  </p>
-                </div>
+                  <% end %>
+                </p>
               </div>
-
-              <div class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+              <div class="log-row-actions">
                 <.link
                   id={"open-reading-log-#{reading_log.id}"}
                   href={~p"/reading-logs/#{reading_log.id}/open"}
-                  class="col-span-2 inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0 sm:col-span-1"
+                  class="workspace-button"
                 >
                   Open <.icon name="hero-arrow-right" class="size-4" />
                 </.link>
                 <.link
                   id={"edit-reading-log-#{reading_log.id}"}
                   navigate={~p"/reading-logs/#{reading_log.id}/edit"}
-                  class="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+                  class="workspace-icon-button"
+                  aria-label={"Edit #{reading_log.name}"}
                 >
-                  <.icon name="hero-pencil-square" class="size-4" /> Edit
+                  <.icon name="hero-pencil-square" class="size-4" /><span class="sr-only">Edit</span>
                 </.link>
                 <button
                   id={"delete-reading-log-#{reading_log.id}"}
                   type="button"
                   phx-click="confirm_delete"
                   phx-value-id={reading_log.id}
-                  class="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-rose-200 px-4 text-sm font-semibold text-rose-700 transition hover:border-rose-300 hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2"
+                  class="workspace-icon-button log-delete"
+                  aria-label={"Delete #{reading_log.name}"}
                 >
-                  <.icon name="hero-trash" class="size-4" /> Delete
+                  <.icon name="hero-trash" class="size-4" /><span class="sr-only">Delete</span>
                 </button>
               </div>
             </article>
+          </div>
+        </section>
+
+        <section id="new-reading-log" class="log-new">
+          <header>
+            <h2>Create a new reading log</h2>
+            <p class="workspace-muted">A fresh space for another language or reading goal.</p>
+          </header>
+          <div class="log-new-actions">
+            <.link
+              id="create-reading-log"
+              navigate={~p"/reading-logs/new"}
+              class="workspace-button"
+            >
+              <.icon name="hero-plus" class="size-4" /> Create New Reading Log
+            </.link>
+            <.link
+              id="restore-backup"
+              navigate={~p"/settings/restore"}
+              class="workspace-button"
+            >
+              <.icon name="hero-arrow-up-tray" class="size-4" /> Restore from backup
+            </.link>
           </div>
         </section>
       </section>

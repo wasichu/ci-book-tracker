@@ -1,0 +1,396 @@
+<Layouts.app flash={@flash} workspace={@workspace} canvas={true}>
+  <section id="dashboard" class={["workbench", !@inspector_open? && "is-inspector-closed"]}>
+    <div class="workbench-library">
+      <header class="workbench-heading">
+        <div class="min-w-0">
+          <p class="workspace-eyebrow">
+            Your {ReadingLogFormat.language_name(@reading_log.language_code)} library
+          </p>
+          <h1 class="truncate">{@reading_log.name}</h1>
+        </div>
+        <.link id="add-book" navigate={~p"/books/new"} class="workspace-button workspace-primary"><.icon
+          name="hero-plus"
+          class="size-4"
+        /> Add book</.link>
+      </header>
+
+      <div id="summary-cards" class="workbench-summary" data-progress-summary>
+        <span id="summary-books-finished"><strong>{@summary.books_finished}</strong> finished</span>
+        <span id="words-completed"><strong>{BookFormat.number(@summary.words_completed)}</strong>
+        words completed</span>
+        <span id="summary-books-in-progress" class="hidden xl:inline"><strong>{@summary.books_in_progress}</strong>
+        reading</span>
+        <div :if={@reading_log.word_goal} id="goal-progress" class="workbench-goal">
+          <span
+            class="workbench-goal-track"
+            role="progressbar"
+            aria-label="Reading goal progress"
+            aria-valuenow={@summary.goal_progress}
+            aria-valuemin="0"
+            aria-valuemax="100"
+          ><span style={"width: #{@summary.goal_progress}%"}></span></span>
+          <.link patch={~p"/dashboard?view=progress"}>{@summary.goal_progress}% of {BookFormat.words(
+            @reading_log.word_goal
+          )}</.link>
+        </div>
+        <span :if={is_nil(@reading_log.word_goal)} class="workbench-no-goal">Build your reading habit one book at a time.</span>
+      </div>
+
+      <div class="workbench-search-bar">
+        <.form
+          for={@search_form}
+          id="book-search-form"
+          phx-change="search_books"
+          class="workbench-search"
+        >
+          <.icon name="hero-magnifying-glass" class="size-4" />
+          <.input
+            field={@search_form[:query]}
+            type="search"
+            placeholder="Find a title or author…"
+            aria-label="Search your books"
+            autocomplete="off"
+            phx-debounce="200"
+            class="workbench-search-input"
+          />
+        </.form>
+        <button
+          type="button"
+          class="workspace-icon-button"
+          data-toggle-progress
+          aria-label="Toggle progress summary"
+          phx-mounted={JS.ignore_attributes("aria-expanded")}
+          aria-controls="summary-cards"
+          aria-expanded="true"
+        ><.icon name="hero-chart-bar" class="size-4" /></button>
+        <button
+          id="toggle-book-inspector"
+          type="button"
+          phx-click="toggle_inspector"
+          aria-expanded={to_string(@inspector_open?)}
+          aria-controls="book-inspector"
+          aria-label="Toggle book inspector"
+          class="workspace-icon-button"
+        ><.icon name="hero-view-columns" class="size-4" /></button>
+      </div>
+
+      <div id="book-filters" class="workbench-filter-bar">
+        <nav aria-label="Filter books by status" class="workbench-status-filters">
+          <button
+            :for={{status, label} <- @status_filters}
+            id={"filter-#{status}"}
+            type="button"
+            phx-click="filter_books"
+            phx-value-status={status}
+            aria-pressed={to_string(@status_filter == status)}
+            class={["workbench-filter", @status_filter == status && "is-active"]}
+          >
+            <span>{label}</span><span class="workbench-filter-count">{if status == :all,
+              do: length(@all_books),
+              else: Map.get(@status_counts, status, 0)}</span>
+          </button>
+        </nav>
+        <.form
+          :if={@difficulty_options != []}
+          for={to_form(%{"difficulty" => @difficulty_filter}, as: :difficulty)}
+          phx-change="filter_difficulty"
+          id="difficulty-filter-form"
+          class="workbench-difficulty"
+        >
+          <.input
+            type="select"
+            name="difficulty"
+            value={@difficulty_filter}
+            options={[{"All levels", "all"} | Enum.map(@difficulty_options, &{&1, &1})]}
+            aria-label="Filter books by difficulty"
+            class="workspace-select"
+          />
+        </.form>
+      </div>
+
+      <div id="book-viewport" class="workbench-book-viewport" phx-hook="BookViewport">
+        <div class="workbench-table-heading" aria-hidden="true">
+          <span>Title / author</span><span>Status</span><span class="text-right">Est. words</span><span></span>
+        </div>
+        <div
+          id="book-list"
+          phx-update="stream"
+          role="list"
+          aria-label="Books"
+          class="workbench-book-list"
+        >
+          <article
+            :for={{dom_id, book} <- @streams.books}
+            id={dom_id}
+            role="listitem"
+            data-book-row
+            class={[
+              "workbench-book-row",
+              @selected_book && @selected_book.id == book.id && "is-selected"
+            ]}
+          >
+            <button
+              id={"select-book-#{book.id}"}
+              type="button"
+              phx-click="select_book"
+              phx-value-id={book.id}
+              aria-label={"View #{book.title}"}
+              aria-pressed={to_string(@selected_book && @selected_book.id == book.id)}
+              class="workbench-book-choice"
+            >
+              <.book_cover
+                id={"book-#{book.id}-cover"}
+                title={book.title}
+                cover_path={book.cover_path}
+                cover_url={book.cover_url}
+                cover_provider={book.cover_provider}
+                cover_id={book.cover_id}
+                class="workbench-row-cover"
+              />
+              <span class="min-w-0"><span class="workbench-book-title">{book.title}</span><span class="workbench-book-author">{book.author ||
+                "Author not set"}</span></span>
+            </button>
+            <span class="workbench-status" data-status={book.status}><span class="workspace-dot"></span>{BookFormat.status_label(
+              book.status
+            )}</span>
+            <span class="workbench-book-words">{display_number(book.estimated_words)}</span>
+            <.link
+              id={"book-#{book.id}-edit"}
+              navigate={~p"/books/#{book.id}/edit"}
+              aria-label={"Edit #{book.title}"}
+              class="workspace-icon-button"
+            ><.icon name="hero-pencil-square" class="size-4" /></.link>
+          </article>
+        </div>
+        <div
+          :if={@matching_book_count == 0}
+          id={if @filtering?, do: "no-matching-books", else: "empty-library"}
+          class="workbench-empty"
+        >
+          <.icon
+            name={if @filtering?, do: "hero-magnifying-glass", else: "hero-book-open"}
+            class="size-9"
+          />
+          <h2>
+            {if @filtering?,
+              do: "No books match this search.",
+              else: "Your next chapter starts here."}
+          </h2>
+          <p>
+            {if @filtering?,
+              do: "Try another title, author, status, or difficulty.",
+              else: "Add a book or import your reading list to get started."}
+          </p>
+          <.link
+            :if={!@filtering?}
+            navigate={~p"/books/new"}
+            class="workspace-button workspace-primary mt-4"
+          ><.icon name="hero-plus" class="size-4" /> Add your first book</.link>
+        </div>
+      </div>
+
+      <footer class="workbench-pagination">
+        <span id="book-page-range">{@first_book_index}–{@last_book_index} of {@matching_book_count} books</span>
+        <.link
+          id="import-books"
+          navigate={~p"/books/import"}
+          class="workspace-button workspace-quiet"
+        ><.icon name="hero-document-arrow-up" class="size-4" /> Import CSV</.link>
+        <span class="ml-auto">{@page_index + 1} / {@page_count}</span>
+        <button
+          id="previous-book-page"
+          type="button"
+          phx-click="paginate"
+          phx-value-direction="previous"
+          disabled={@page_index == 0}
+          class="workspace-icon-button"
+          aria-label="Previous page"
+        ><.icon name="hero-chevron-left" class="size-4" /></button>
+        <button
+          id="next-book-page"
+          type="button"
+          phx-click="paginate"
+          phx-value-direction="next"
+          disabled={@page_index + 1 == @page_count}
+          class="workspace-icon-button"
+          aria-label="Next page"
+        ><.icon name="hero-chevron-right" class="size-4" /></button>
+      </footer>
+    </div>
+
+    <aside
+      :if={@inspector_open?}
+      id="book-inspector"
+      class="workbench-inspector"
+      aria-label="Selected book inspector"
+    >
+      <div class="workbench-inspector-heading">
+        <span class="workspace-eyebrow">Book inspector</span><button
+          id="close-book-inspector"
+          type="button"
+          phx-click="close_inspector"
+          class="workspace-icon-button"
+          aria-label="Close book inspector"
+        ><.icon name="hero-x-mark" class="size-4" /></button>
+      </div>
+      <%= if @selected_book do %>
+        <div class="workbench-cover-stage">
+          <.book_cover
+            id="inspector-book-cover"
+            title={@selected_book.title}
+            cover_path={@selected_book.cover_path}
+            cover_url={@selected_book.cover_url}
+            cover_provider={@selected_book.cover_provider}
+            cover_id={@selected_book.cover_id}
+            size={:detail}
+            class="workbench-detail-cover"
+          />
+          <span class="workbench-status" data-status={@selected_book.status}><span class="workspace-dot"></span>{BookFormat.status_label(
+            @selected_book.status
+          )}</span>
+        </div>
+        <h2 id="inspector-book-title">{@selected_book.title}</h2>
+        <p class="workbench-inspector-author">{@selected_book.author || "Author not set"}</p>
+        <nav class="workspace-tabs" aria-label="Book information">
+          <button
+            :for={tab <- ~w(details notes metadata)}
+            id={"inspector-tab-#{tab}"}
+            type="button"
+            phx-click="inspector_tab"
+            phx-value-tab={tab}
+            aria-pressed={to_string(@inspector_tab == tab)}
+            class={[@inspector_tab == tab && "is-active"]}
+          >{String.capitalize(tab)}</button>
+        </nav>
+        <div class="workbench-inspector-content">
+          <dl :if={@inspector_tab == "details"} class="workbench-detail-grid">
+            <div>
+              <dt>Difficulty</dt><dd>{@selected_book.difficulty_label || "Not set"}</dd>
+            </div>
+            <div>
+              <dt>Pages</dt><dd>{display_number(@selected_book.page_count)}</dd>
+            </div>
+            <div>
+              <dt>Estimated words</dt><dd>{display_number(@selected_book.estimated_words)}</dd>
+            </div>
+            <div>
+              <dt>Added</dt><dd>{display_date(@selected_book.added_on)}</dd>
+            </div>
+            <div>
+              <dt>Started</dt><dd>{display_date(@selected_book.started_on)}</dd>
+            </div>
+            <div>
+              <dt>Finished</dt><dd>{display_date(@selected_book.finished_on)}</dd>
+            </div>
+          </dl>
+          <div :if={@inspector_tab == "notes"} id="inspector-notes" class="workbench-notes">
+            <%= if @selected_book.notes do %>
+              <p class="whitespace-pre-wrap">{@selected_book.notes}</p>
+            <% else %>
+              <p class="workspace-muted">
+                No notes yet. Add a thought or something to remember while editing this book.
+              </p>
+            <% end %>
+          </div>
+          <div :if={@inspector_tab == "metadata"} id="inspector-metadata" class="space-y-4">
+            <p class="workspace-muted text-sm">
+              Find book details and cover art with Open Library, Google Books, or Hardcover.
+            </p>
+            <.link
+              id="inspector-refresh-metadata"
+              navigate={~p"/books/#{@selected_book.id}/edit?metadata=refresh"}
+              class="workspace-button"
+            ><.icon name="hero-arrow-path" class="size-4" /> Look up metadata</.link>
+            <p class="workspace-muted text-xs">Manual entry always works offline.</p>
+          </div>
+        </div>
+        <div class="workbench-inspector-actions">
+          <button
+            :for={action <- status_actions(@selected_book.status)}
+            id={"book-#{@selected_book.id}-#{action}"}
+            type="button"
+            phx-click="update_status"
+            phx-value-action={action}
+            phx-value-book_id={@selected_book.id}
+            phx-disable-with="Saving…"
+            class={["workspace-button", action in ~w(start finish reopen) && "workspace-primary"]}
+          ><.icon name={BookActions.icon(action)} class="size-4" /> {BookActions.label(action)}</button>
+          <.link
+            id="inspector-edit-book"
+            navigate={~p"/books/#{@selected_book.id}/edit"}
+            class="workspace-button"
+          >Edit book</.link>
+          <.link
+            id="inspector-full-details"
+            navigate={~p"/books/#{@selected_book.id}"}
+            class="workspace-button workspace-quiet"
+          >All details <.icon name="hero-arrow-up-right" class="size-3" /></.link>
+        </div>
+      <% else %>
+        <div class="workbench-empty">
+          <.icon name="hero-book-open" class="size-10" /><p>
+            Select a book to see its cover and details here.
+          </p>
+        </div>
+      <% end %>
+    </aside>
+
+    <section
+      :if={@progress_open?}
+      id="reading-progress-panel"
+      class="workbench-progress-panel"
+      aria-label="Reading progress"
+    >
+      <header class="workbench-heading">
+        <div>
+          <p class="workspace-eyebrow">
+            {ReadingLogFormat.language_name(@reading_log.language_code)} · Reading progress
+          </p><h2>A little more, every day.</h2>
+        </div><.link
+          patch={~p"/dashboard"}
+          class="workspace-icon-button"
+          aria-label="Close reading progress"
+        ><.icon name="hero-x-mark" class="size-5" /></.link>
+      </header>
+      <div class="workbench-progress-total">
+        <strong>{BookFormat.number(@summary.words_completed)}</strong><span>words completed</span>
+      </div>
+      <div :if={@reading_log.word_goal} id="word-goal-card" class="workbench-progress-goal">
+        <span>Goal: {ReadingLogFormat.format_word_goal(@reading_log.word_goal)}</span><strong>{@summary.goal_progress}%</strong>
+      </div>
+      <div :if={@reading_log.word_goal} class="workbench-large-progress">
+        <span style={"width: #{@summary.goal_progress}%"}></span>
+      </div>
+      <div class="workbench-progress-stats">
+        <div><strong>{@summary.books_finished}</strong><span>Books finished</span></div><div>
+          <strong>{@summary.books_in_progress}</strong><span>In progress</span>
+        </div><div id="summary-progress-volume">
+          <strong>{display_number(
+            if @summary.words_in_progress > 0,
+              do: @summary.words_in_progress,
+              else: @summary.pages_in_progress
+          )}</strong><span>{if @summary.words_in_progress > 0,
+            do: "Words in progress",
+            else: "Pages in progress"}</span>
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-2 mt-8">
+        <.link
+          id="edit-reading-log"
+          navigate={~p"/reading-logs/#{@reading_log.id}/edit?from=dashboard"}
+          class="workspace-button"
+        ><.icon name="hero-adjustments-horizontal" class="size-4" /> Log settings</.link><.link
+          id="dashboard-export-database"
+          href={~p"/backup/database"}
+          download
+          class="workspace-button"
+        ><.icon name="hero-arrow-down-tray" class="size-4" /> Export backup</.link><.link
+          id="switch-reading-log"
+          href={~p"/reading-log-session"}
+          method="delete"
+          class="workspace-button"
+        >Switch log</.link>
+      </div>
+    </section>
+  </section>
+</Layouts.app>

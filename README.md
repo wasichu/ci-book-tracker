@@ -39,6 +39,7 @@ Further background:
 
 ## Features
 
+- Compact Workbench with collapsible navigation, book covers, and a book inspector
 - Multiple language-specific reading logs
 - Editable reading goals and estimated words-read totals
 - Add, edit, view, and delete books
@@ -74,7 +75,7 @@ without internet access.
 
 ## Word Count Estimator
 
-The global header links to a standalone word count estimator that does not
+The sidebar and command menu link to a standalone word count estimator that does not
 require an active reading log. Paste a representative passage, enter how many
 pages, Kindle locations, screens, chapters, or percentage points it covers,
 and provide the corresponding total for the book.
@@ -96,23 +97,40 @@ or editing a book, where its result can be applied directly to the book form.
 See [`docs/prompts/00_philosophy.md`](docs/prompts/00_philosophy.md) for the
 original project philosophy.
 
-## Screenshots
+## Workbench
 
-### Reading Log Selection
+The Slate and Iris interface keeps the library, book covers, and selected book's
+details together in one workspace. Collapse the navigation or book inspector to
+make more room, filter the library, or open Progress to review a reading goal.
+Book editing and settings use tabs to keep related controls together.
 
-![Reading log selection](docs/screenshots/home.png)
+Press Command-K (Control-K on other platforms) to open the command menu. While
+the menu is open, use the displayed letter shortcuts:
 
-### Reading Dashboard
+| Key | Command |
+| --- | --- |
+| N | Add a book |
+| I | Import books from CSV |
+| W | Word estimator |
+| P | Reading progress |
+| B | Backup and restore |
+| S | Settings |
+| L | Manage reading logs |
 
-![Spanish reading dashboard](docs/screenshots/dashboard.png)
+In the library, `/` focuses book search and the arrow keys or J/K move between
+books when you are not typing into a field. Escape closes the book inspector.
+Routine success messages stay out of the way; errors appear inline.
 
-### Book Details
+## Backup and restore
 
-![Book details for an in-progress Spanish reader](docs/screenshots/book-details.png)
+Export creates a ZIP containing the SQLite database and local cover images.
+Both the backup file and its expanded contents must fit within the same 250 MB
+limit. Export and restore explain when a backup exceeds that limit.
 
-### Cover Art
-
-![Cover image URL, upload, and preview controls](docs/screenshots/cover-art.png)
+Before restoring, the app saves the current database and covers to a timestamped
+ZIP in the `backups` folder beside the active database. The restore page shows
+the actual folder path. If that automatic backup fails, restoration stops before
+replacing the current data.
 
 ## Native Packages and Homebrew
 

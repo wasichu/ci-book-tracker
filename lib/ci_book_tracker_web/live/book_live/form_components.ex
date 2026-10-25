@@ -28,23 +28,18 @@ defmodule CiBookTrackerWeb.BookLive.FormComponents do
     ~H"""
     <section
       id="metadata-search"
-      class="rounded-[2rem] border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-5 shadow-sm shadow-amber-100/70 sm:p-7"
+      class="workspace-metadata"
     >
-      <div class="flex items-start gap-3">
-        <span class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800">
-          <.icon name="hero-magnifying-glass" class="size-5" />
-        </span>
-        <div>
-          <h2 class="text-lg font-semibold text-slate-950">{metadata_heading(@book)}</h2>
-          <p class="mt-1 text-sm leading-6 text-slate-600">{metadata_intro(@book)}</p>
-        </div>
-      </div>
+      <header class="metadata-heading">
+        <h2>{metadata_heading(@book)}</h2>
+        <p class="workspace-muted mt-2">{metadata_intro(@book)}</p>
+      </header>
 
       <.form
         for={@metadata_form}
         id="metadata-search-form"
         phx-submit="search_metadata"
-        class="mt-5"
+        class="metadata-search-form"
       >
         <.input
           field={@metadata_form[:provider]}
@@ -62,7 +57,7 @@ defmodule CiBookTrackerWeb.BookLive.FormComponents do
           id="search-metadata-button"
           type="submit"
           phx-disable-with="Searching..."
-          class="mt-1 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 font-semibold text-white transition hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 sm:w-auto"
+          class="workspace-button workspace-primary mt-1"
         >
           <.icon
             name={if @status == :loading, do: "hero-arrow-path", else: "hero-magnifying-glass"}
@@ -75,11 +70,7 @@ defmodule CiBookTrackerWeb.BookLive.FormComponents do
         :if={@message}
         id="metadata-message"
         role="status"
-        class={[
-          "mt-4 rounded-xl px-4 py-3 text-sm leading-6",
-          @status == :error && "bg-red-50 text-red-800",
-          @status != :error && "bg-white text-slate-700 ring-1 ring-slate-200"
-        ]}
+        class={["metadata-status", @status == :error && "is-error"]}
       >
         {@message}
       </p>
@@ -88,7 +79,7 @@ defmodule CiBookTrackerWeb.BookLive.FormComponents do
         <article
           :for={result <- @results}
           id={"metadata-result-#{result.id}"}
-          class="flex gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+          class="metadata-result"
         >
           <img
             :if={result.cover_url}
@@ -96,10 +87,10 @@ defmodule CiBookTrackerWeb.BookLive.FormComponents do
             alt={"Cover of #{result.title}"}
             class="h-24 w-16 shrink-0 rounded-lg bg-slate-100 object-cover"
           />
-          <div class="min-w-0 flex-1">
+          <div class="metadata-result-details min-w-0">
             <div class="flex flex-wrap items-start justify-between gap-2">
               <h3 class="font-semibold leading-6 text-slate-950">{result.title}</h3>
-              <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[0.7rem] font-semibold text-slate-600">
+              <span class="metadata-provider-label">
                 {metadata_provider_label(result.provider)}
               </span>
             </div>
@@ -114,7 +105,7 @@ defmodule CiBookTrackerWeb.BookLive.FormComponents do
                 type="button"
                 phx-click="select_metadata"
                 phx-value-id={result.id}
-                class="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-100 px-4 text-sm font-semibold text-amber-950 transition hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 sm:w-auto"
+                class="workspace-button workspace-primary"
               >
                 <.icon name="hero-arrow-down-tray" class="size-4" /> Use this book
               </button>
@@ -123,7 +114,7 @@ defmodule CiBookTrackerWeb.BookLive.FormComponents do
                 type="button"
                 phx-click="select_cover"
                 phx-value-id={result.id}
-                class="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-amber-400 hover:bg-amber-50 hover:text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 sm:w-auto"
+                class="workspace-button"
               >
                 <.icon name="hero-photo" class="size-4" /> Use cover only
               </button>
@@ -133,7 +124,7 @@ defmodule CiBookTrackerWeb.BookLive.FormComponents do
                 type="submit"
                 form={@book_form_id}
                 phx-disable-with="Saving..."
-                class="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-700 px-4 text-sm font-semibold text-white shadow-sm shadow-amber-900/15 transition hover:-translate-y-0.5 hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0 disabled:translate-y-0 sm:w-auto"
+                class="workspace-button workspace-primary"
               >
                 <.icon name="hero-book-open" class="size-4" /> {@save_label}
               </button>
@@ -145,7 +136,7 @@ defmodule CiBookTrackerWeb.BookLive.FormComponents do
       <section
         :if={@pending_metadata}
         id="metadata-review"
-        class="mt-5 rounded-2xl border border-amber-300 bg-amber-50 p-4 sm:p-5"
+        class="metadata-review"
       >
         <p class="text-xs font-semibold uppercase tracking-[0.16em] text-amber-800">
           Use this book
@@ -155,7 +146,7 @@ defmodule CiBookTrackerWeb.BookLive.FormComponents do
           {@pending_metadata.author}
         </p>
 
-        <dl class="mt-4 divide-y divide-amber-200 text-sm">
+        <dl class="mt-4 text-sm">
           <div class="flex items-center justify-between gap-4 py-3">
             <dt class="text-slate-600">Cover</dt>
             <dd class="font-semibold text-slate-900">
@@ -187,15 +178,15 @@ defmodule CiBookTrackerWeb.BookLive.FormComponents do
             id="apply-metadata"
             type="button"
             phx-click="apply_metadata"
-            class="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-amber-700 px-4 text-sm font-semibold text-white transition hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+            class="workspace-button workspace-primary"
           >
-            <.icon name="hero-check" class="size-4" /> Apply Metadata
+            <.icon name="hero-check" class="size-4" /> Apply metadata
           </button>
           <button
             id="cancel-metadata"
             type="button"
             phx-click="cancel_metadata"
-            class="inline-flex min-h-12 items-center justify-center rounded-xl border border-amber-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+            class="workspace-button"
           >
             Cancel
           </button>
@@ -213,6 +204,8 @@ defmodule CiBookTrackerWeb.BookLive.FormComponents do
   attr :status_options, :list, required: true
   attr :save_label, :string, required: true
 
+  attr :active_tab, :string, default: "book"
+
   def book_fields(assigns) do
     ~H"""
     <input type="hidden" name={@form[:cover_url].name} value={@form[:cover_url].value} />
@@ -220,21 +213,20 @@ defmodule CiBookTrackerWeb.BookLive.FormComponents do
     <input type="hidden" name={@form[:cover_provider].name} value={@form[:cover_provider].value} />
     <input type="hidden" name={@form[:cover_id].name} value={@form[:cover_id].value} />
 
-    <.input
-      field={@form[:title]}
-      label="Title"
-      placeholder="The Little Prince"
-      required
-      autocomplete="off"
-    />
-    <.input
-      field={@form[:author]}
-      label="Author"
-      placeholder="Antoine de Saint-Exupery"
-      autocomplete="off"
-    />
-
-    <div class="space-y-4">
+    <div id="editor-panel-book" hidden={@active_tab != "book"} class="workspace-editor-fields">
+      <.input
+        field={@form[:title]}
+        label="Title"
+        placeholder="The Little Prince"
+        required
+        autocomplete="off"
+      />
+      <.input
+        field={@form[:author]}
+        label="Author"
+        placeholder="Antoine de Saint-Exupery"
+        autocomplete="off"
+      />
       <.input
         field={@form[:page_count]}
         type="number"
@@ -243,11 +235,10 @@ defmodule CiBookTrackerWeb.BookLive.FormComponents do
         min="1"
         inputmode="numeric"
       />
-
       <div
         :if={FormParams.calculated_estimate?(@form)}
         id="calculated-estimated-words"
-        class="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5"
+        class="workspace-calculated-words"
       >
         <input
           type="hidden"
@@ -255,23 +246,15 @@ defmodule CiBookTrackerWeb.BookLive.FormComponents do
           value={@form[:estimated_words].value}
         />
         <input type="hidden" name={@form[:estimated_words_mode].name} value="calculated" />
-        <p class="text-sm font-medium text-slate-600">Estimated Total Words</p>
-        <p class="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
-          {BookFormat.number(@form[:estimated_words].value)}
-        </p>
-        <p class="mt-1 flex items-center gap-1.5 text-xs leading-5 text-slate-500">
-          <.icon name="hero-calculator" class="size-4" /> Using 250 words per page
-        </p>
+        <span>Estimated Total Words</span><strong>{BookFormat.number(@form[:estimated_words].value)}</strong>
+        <span class="text-xs">Using 250 words per page</span>
         <button
           id="enter-word-estimate"
           type="button"
           phx-click="enter_word_estimate"
-          class="mt-3 inline-flex items-center gap-1.5 rounded-lg text-sm font-semibold text-teal-700 transition-colors hover:text-teal-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-teal-600"
-        >
-          <.icon name="hero-pencil-square" class="size-4" /> Enter your own estimate
-        </button>
+          class="workspace-text-button"
+        >Enter your own estimate</button>
       </div>
-
       <div :if={!FormParams.calculated_estimate?(@form)}>
         <input
           type="hidden"
@@ -286,125 +269,101 @@ defmodule CiBookTrackerWeb.BookLive.FormComponents do
           min="1"
           inputmode="numeric"
         />
-        <p :if={is_nil(@book)} class="-mt-2 text-xs leading-5 text-slate-500">
-          Enter the book's total word count, such as an estimate you found online, or use the helper below.
+        <p :if={is_nil(@book)} class="workspace-muted text-xs -mt-2">
+          Enter a total, or open the Word estimate tab.
         </p>
       </div>
+      <.input
+        field={@form[:difficulty_label]}
+        label="Difficulty"
+        placeholder="A1, B2, intermediate…"
+        autocomplete="off"
+      />
+      <.input field={@form[:status]} type="select" label="Reading status" options={@status_options} />
     </div>
 
-    <WordEstimatorComponents.panel
-      form={@estimator_form}
-      result={@estimator_result}
-      apply_event="apply_word_estimate"
-    />
+    <div id="editor-panel-estimate" hidden={@active_tab != "estimate"}>
+      <WordEstimatorComponents.panel
+        form={@estimator_form}
+        result={@estimator_result}
+        apply_event="apply_word_estimate"
+      />
+    </div>
 
-    <fieldset class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
-      <legend class="px-1 text-sm font-semibold text-slate-700">Cover art</legend>
-      <div class="mt-4 grid gap-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
-        <div class="space-y-4">
-          <.input
-            field={@form[:cover_image_url]}
-            type="url"
-            label="Cover image URL"
-            placeholder="https://m.media-amazon.com/images/I/71WLpK0hFYL._SL1499_.jpg"
-            autocomplete="off"
-          />
-          <div>
-            <label
-              for={@uploads.cover_art.ref}
-              class="block text-sm font-semibold leading-6 text-slate-900"
-            >
-              Upload cover image
-            </label>
-            <.live_file_input
-              upload={@uploads.cover_art}
-              class="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm text-slate-700 file:mr-4 file:rounded-lg file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
-            />
-            <p class="mt-2 text-xs leading-5 text-slate-500">
-              JPG, PNG, WebP, or GIF up to 8 MB. Uploaded files take precedence over URLs.
-            </p>
-            <p
-              :for={entry <- @uploads.cover_art.entries}
-              id={"cover-upload-#{entry.ref}"}
-              class="mt-2 text-xs font-medium text-slate-600"
-            >
-              {entry.client_name} · {entry.progress}%
-            </p>
-            <p
-              :for={error <- upload_errors(@uploads.cover_art)}
-              class="mt-2 text-xs font-semibold text-red-700"
-            >
-              {cover_upload_error(error)}
-            </p>
-          </div>
-        </div>
-
-        <.book_cover
-          id="cover-preview"
-          title={FormParams.cover_preview_title(@form)}
-          cover_path={@form[:cover_path].value}
-          cover_url={FormParams.cover_preview_url(@form)}
-          cover_provider={@form[:cover_provider].value}
-          cover_id={FormParams.cover_preview_id(@form[:cover_id].value)}
-          size={:detail}
+    <fieldset id="editor-panel-cover" hidden={@active_tab != "cover"} class="workspace-editor-cover">
+      <legend class="sr-only">Cover art</legend>
+      <div>
+        <.input
+          field={@form[:cover_image_url]}
+          type="url"
+          label="Cover image URL"
+          placeholder="https://…"
+          autocomplete="off"
         />
+        <label for={@uploads.cover_art.ref} class="block text-sm font-medium mb-2">Upload cover image</label>
+        <.live_file_input upload={@uploads.cover_art} class="workspace-file-input" />
+        <p class="workspace-muted text-xs mt-2 leading-5">
+          JPG, PNG, WebP, or GIF up to 8 MB. Uploaded files take precedence over URLs.
+        </p>
+        <p
+          :for={entry <- @uploads.cover_art.entries}
+          id={"cover-upload-#{entry.ref}"}
+          class="text-xs mt-3"
+        >
+          {entry.client_name} · {entry.progress}%
+        </p>
+        <p :for={error <- upload_errors(@uploads.cover_art)} class="mt-2 text-xs text-red-700">
+          {cover_upload_error(error)}
+        </p>
       </div>
+      <.book_cover
+        id="cover-preview"
+        title={FormParams.cover_preview_title(@form)}
+        cover_path={@form[:cover_path].value}
+        cover_url={FormParams.cover_preview_url(@form)}
+        cover_provider={@form[:cover_provider].value}
+        cover_id={FormParams.cover_preview_id(@form[:cover_id].value)}
+        size={:detail}
+      />
     </fieldset>
 
-    <.input
-      field={@form[:difficulty_label]}
-      label="Difficulty"
-      placeholder="Beginner, intermediate, advanced, A1, B2, ..."
-      autocomplete="off"
-    />
-
-    <div class="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 sm:p-5">
-      <.input
-        field={@form[:status]}
-        type="select"
-        label="Reading status"
-        options={@status_options}
-      />
-      <p class="-mt-2 text-xs leading-5 text-amber-900/70">
-        Adding a book you've already started or finished? Set its status here.
-      </p>
-    </div>
-
-    <fieldset class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
-      <legend class="px-1 text-sm font-semibold text-slate-700">Reading dates</legend>
-      <p class="mt-1 text-xs leading-5 text-slate-500">
+    <fieldset id="editor-panel-history" hidden={@active_tab != "history"}>
+      <legend class="sr-only">Reading dates</legend>
+      <p class="workspace-muted text-sm mb-5">
         Optional. Missing dates are filled automatically for in-progress and finished books.
       </p>
-      <div class="mt-4 grid gap-5 sm:grid-cols-2">
+      <div class="workspace-editor-fields">
         <.input field={@form[:started_on]} type="date" label="Started on" />
         <.input field={@form[:finished_on]} type="date" label="Finished on" />
       </div>
     </fieldset>
 
-    <.input
-      field={@form[:notes]}
-      type="textarea"
-      label="Notes"
-      placeholder="Why this book, reading plan, edition details..."
-      rows="5"
-    />
+    <div id="editor-panel-notes" hidden={@active_tab != "notes"}>
+      <.input
+        field={@form[:notes]}
+        type="textarea"
+        label="Notes"
+        placeholder="Why this book, reading plan, edition details…"
+        rows="8"
+      />
+    </div>
 
-    <div class="border-t border-slate-100 pt-6">
+    <footer class="workspace-editor-footer">
+      <span class="workspace-muted text-xs">{if @book,
+        do: "Changes are saved when you choose Save changes.",
+        else: "Only a title is required."}</span>
       <.button
         id="save-book"
         type="submit"
-        variant="primary"
-        phx-disable-with="Saving..."
-        class="flex min-h-16 w-full items-center justify-center gap-3 rounded-2xl bg-amber-700 px-6 text-base font-semibold text-white shadow-lg shadow-amber-900/15 transition hover:-translate-y-0.5 hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0 disabled:translate-y-0"
-      >
-        <.icon name="hero-book-open" class="size-5" /> {@save_label}
-      </.button>
-    </div>
+        phx-disable-with="Saving…"
+        class="workspace-button workspace-primary"
+      ><.icon name="hero-check" class="size-4" /> {@save_label}</.button>
+    </footer>
     """
   end
 
-  defp metadata_heading(nil), do: "Find Metadata"
-  defp metadata_heading(_book), do: "Refresh Metadata"
+  defp metadata_heading(nil), do: "Find metadata"
+  defp metadata_heading(_book), do: "Refresh metadata"
 
   defp metadata_intro(nil), do: "Optional. Find a book, then review the details before saving."
 

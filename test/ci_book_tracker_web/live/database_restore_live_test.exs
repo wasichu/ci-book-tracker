@@ -12,7 +12,7 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLiveTest do
     assert has_element?(
              view,
              "#restore-backup[href='/settings/restore']",
-             "Restore from Backup"
+             "Restore from backup"
            )
   end
 
@@ -23,12 +23,26 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLiveTest do
     {:ok, view, _html} = live(conn, ~p"/settings/restore")
 
     assert has_element?(view, "#database-restore-page", "Restore backup")
-    assert has_element?(view, "#restore-upload", "Export your current database")
-    assert has_element?(view, "#restore-upload a[href='/backup/database']")
+
+    assert has_element?(
+             view,
+             "#database-restore-form",
+             "250 MB for the file and its expanded contents"
+           )
+
+    assert has_element?(view, "#restore-backup-guidance", "backed up automatically")
+    refute has_element?(view, "#restore-upload a[href='/backup/database']")
+
+    assert has_element?(
+             view,
+             "#restore-backup-guidance",
+             CiBookTracker.DatabaseRestore.backup_directory()
+           )
+
     refute has_element?(view, "#restore-confirmation")
   end
 
-  test "hides the export warning when no reading log is open, even with saved books", %{
+  test "explains automatic backups when no reading log is open, even with saved books", %{
     conn: conn
   } do
     reading_log = Library.create_reading_log!("Spanish", "es", nil)
@@ -36,11 +50,11 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/settings/restore")
 
-    refute has_element?(view, "#restore-export-warning")
+    assert has_element?(view, "#restore-backup-guidance", "backed up automatically")
     assert has_element?(view, "#database-restore-form")
   end
 
-  test "hides the export warning for an empty open log or stale selection", %{conn: conn} do
+  test "explains automatic backups for an empty open log or stale selection", %{conn: conn} do
     empty_log = Library.create_reading_log!("French", "fr", nil)
     other_log = Library.create_reading_log!("Spanish", "es", nil)
     Library.add_book!(other_log.id, "A tracked book")
@@ -48,17 +62,17 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLiveTest do
     for id <- [empty_log.id, Ecto.UUID.generate()] do
       selected_conn = init_test_session(conn, %{"active_reading_log_id" => id})
       {:ok, view, _html} = live(selected_conn, ~p"/settings/restore")
-      refute has_element?(view, "#restore-export-warning")
+      assert has_element?(view, "#restore-backup-guidance", "backed up automatically")
     end
   end
 
-  test "shows the export warning for an automatically opened log with books", %{conn: conn} do
+  test "explains automatic backups for an automatically opened log with books", %{conn: conn} do
     reading_log = Library.create_reading_log!("Spanish", "es", nil)
     Library.add_book!(reading_log.id, "A tracked book")
     conn = init_test_session(conn, %{"auto_open_reading_log_id" => reading_log.id})
 
     {:ok, view, _html} = live(conn, ~p"/settings/restore")
-    assert has_element?(view, "#restore-export-warning")
+    assert has_element?(view, "#restore-backup-guidance", "backed up automatically")
   end
 
   test "rejects a file that is not a SQLite database", %{conn: conn} do
@@ -70,7 +84,7 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLiveTest do
       ])
 
     render_upload(upload, "fake.sqlite3")
-    render_async(view)
+    render_async(view, 1000)
 
     assert has_element?(view, "#restore-upload", "not a readable SQLite database")
     refute has_element?(view, "#restore-confirmation")
@@ -90,12 +104,12 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLiveTest do
       ])
 
     render_upload(upload, "backup.zip")
-    render_async(view)
+    render_async(view, 1000)
 
     refute has_element?(view, "#restore-confirmation")
     refute has_element?(view, "#validate-database")
     assert has_element?(view, "#restore-ready", "backup.zip")
-    assert has_element?(view, "#restore-backup-button", "Restore Backup")
+    assert has_element?(view, "#restore-backup-button", "Restore backup")
     refute has_element?(view, "#restore-complete")
 
     view |> element("#restore-ready button", "Choose another file") |> render_click()
@@ -123,7 +137,7 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLiveTest do
       ])
 
     render_upload(upload, "backup.zip")
-    render_async(view)
+    render_async(view, 1000)
 
     assert has_element?(view, "#restore-confirmation", "Backup validated")
 
@@ -134,7 +148,7 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLiveTest do
            )
 
     assert has_element?(view, "#cancel-restore", "Cancel")
-    assert has_element?(view, "#confirm-restore", "Restore Backup")
+    assert has_element?(view, "#confirm-restore", "Restore backup")
 
     view |> element("#cancel-restore") |> render_click()
     refute has_element?(view, "#restore-confirmation")

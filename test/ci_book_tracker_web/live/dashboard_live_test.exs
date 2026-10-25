@@ -1,341 +1,191 @@
 defmodule CiBookTrackerWeb.DashboardLiveTest do
   use CiBookTrackerWeb.ConnCase
-
   import Phoenix.LiveViewTest
-
   alias CiBookTracker.Library
 
   test "requires an active reading log", %{conn: conn} do
     assert {:error, {:live_redirect, %{to: "/"}}} = live(conn, ~p"/dashboard")
   end
 
-  test "shows summaries and only books from the active log", %{conn: conn} do
-    reading_log = Library.create_reading_log!("French", "fr", 100_000)
-    other_log = Library.create_reading_log!("Spanish", "es", 50_000)
+  test "shows the compact summary and keeps other reading logs out of the library", %{conn: conn} do
+    log = Library.create_reading_log!("French novels", "fr", 100_000)
+    other = Library.create_reading_log!("Spanish", "es", 50_000)
 
     finished =
-      Library.add_book!(reading_log.id, "Le Petit Prince", %{
-        author: "Antoine de Saint-Exupery",
+      Library.add_book!(log.id, "Le Petit Prince", %{
         estimated_words: 16_000,
         page_count: 96,
-        difficulty_label: "Intermediate"
+        difficulty_label: "B1"
       })
       |> Library.finish_book!()
 
-    other_book = Library.add_book!(other_log.id, "Invisible")
-    conn = active_log(conn, reading_log)
+    hidden = Library.add_book!(other.id, "Invisible")
+    {:ok, view, _} = live(active_log(conn, log), ~p"/dashboard")
 
-    {:ok, view, html} = live(conn, ~p"/dashboard")
-
+    assert has_element?(view, "#workspace-sidebar", "French novels")
     assert has_element?(view, "#dashboard", "French")
-    assert has_element?(view, "#word-goal-card", "Goal")
-    assert has_element?(view, "#word-goal-card", "100 thousand words")
-    refute has_element?(view, "#word-goal-card", "100,000")
-    refute render(view) =~ "Your goal is"
     assert has_element?(view, "#summary-books-finished", "1")
     assert has_element?(view, "#words-completed", "16,000")
     assert has_element?(view, "#goal-progress", "16%")
-    assert has_element?(view, "#books-finished #book-#{finished.id}", "Le Petit Prince")
-
-    {header_position, _length} = :binary.match(html, ~s(id="summary-cards"))
-    {word_goal_position, _length} = :binary.match(html, ~s(id="word-goal-card"))
-    {finished_summary_position, _length} = :binary.match(html, ~s(id="summary-books-finished"))
-
-    assert header_position < word_goal_position
-    assert word_goal_position < finished_summary_position
-
-    assert has_element?(
-             view,
-             "#book-#{finished.id}-edit[href='/books/#{finished.id}/edit']",
-             "Edit"
-           )
-
-    refute has_element?(view, "#book-#{other_book.id}")
-    assert has_element?(view, "#switch-reading-log", "Switch Log")
-
-    assert has_element?(
-             view,
-             "#dashboard-export-database[href='/backup/database']",
-             "Export Backup"
-           )
-
-    assert has_element?(
-             view,
-             "#edit-reading-log[href='/reading-logs/#{reading_log.id}/edit?from=dashboard']",
-             "Log Settings"
-           )
-
-    assert html =~ "Antoine de Saint-Exupery"
-    assert html =~ "Intermediate"
-    assert html =~ "96 pages"
+    assert has_element?(view, "#books-#{finished.id}", "Le Petit Prince")
+    refute has_element?(view, "#books-#{hidden.id}")
+    assert has_element?(view, "#inspector-book-title", "Le Petit Prince")
+    assert has_element?(view, "#inspector-edit-book[href='/books/#{finished.id}/edit']")
   end
 
-  test "shows empty status groups and no goal progress when goal is unset", %{conn: conn} do
-    reading_log = Library.create_reading_log!("Spanish", "es", nil)
-    conn = active_log(conn, reading_log)
-
-    {:ok, view, _html} = live(conn, ~p"/dashboard")
-
-    assert has_element?(view, "#dashboard", "Build your reading habit one book at a time.")
-    refute has_element?(view, "#word-goal-card")
+  test "shows a useful empty library rather than four empty status groups", %{conn: conn} do
+    log = Library.create_reading_log!("Spanish", "es", nil)
+    {:ok, view, _} = live(active_log(conn, log), ~p"/dashboard")
+    assert has_element?(view, "#empty-library", "Your next chapter starts here.")
+    assert has_element?(view, "#book-inspector", "Select a book")
     refute has_element?(view, "#goal-progress")
-    refute has_element?(view, "#summary-progress-volume")
-
-    for status <- ~w(in_progress want_to_read finished abandoned) do
-      assert has_element?(view, "#books-#{status}", "No books here yet.")
-    end
+    assert has_element?(view, "#book-page-range", "0–0 of 0 books")
   end
 
-  test "shows small covers and placeholders without changing card layout", %{conn: conn} do
-    reading_log = Library.create_reading_log!("Spanish", "es", nil)
+  test "selects books and swaps details, notes and metadata in the inspector", %{conn: conn} do
+    log = Library.create_reading_log!("Spanish", "es", nil)
 
-    covered =
-      reading_log.id
-      |> Library.add_book!("Covered book")
-      |> put_legacy_cover(%{
-        cover_provider: "open_library",
-        cover_id: 456,
-        cover_url: "https://covers.openlibrary.org/b/id/456-M.jpg"
+    first =
+      Library.add_book!(log.id, "First", %{
+        author: "A reader",
+        notes: "Remember this passage",
+        page_count: 205
       })
 
-    uncovered = Library.add_book!(reading_log.id, "Manual book")
-
-    {:ok, view, _html} = live(active_log(conn, reading_log), ~p"/dashboard")
-
-    assert has_element?(
-             view,
-             "#book-#{covered.id}-cover img[src='https://covers.openlibrary.org/b/id/456-S.jpg'][alt='Cover of Covered book']"
-           )
-
-    assert has_element?(view, "#book-#{uncovered.id}-cover .hero-book-open")
-    refute has_element?(view, "#book-#{uncovered.id}-cover img")
-  end
-
-  test "orders completed words after finished books and prefers words in progress", %{conn: conn} do
-    reading_log = Library.create_reading_log!("Spanish", "es", nil)
-
-    reading_log.id
-    |> Library.add_book!("First active book", %{page_count: 120, estimated_words: 30_000})
-    |> Library.start_book!()
-
-    reading_log.id
-    |> Library.add_book!("Second active book", %{page_count: 80, estimated_words: 20_000})
-    |> Library.start_book!()
-
-    conn = active_log(conn, reading_log)
-    {:ok, view, html} = live(conn, ~p"/dashboard")
+    second = Library.add_book!(log.id, "Second", %{author: "Another reader"})
+    {:ok, view, _} = live(active_log(conn, log), ~p"/dashboard")
+    view |> element("#select-book-#{first.id}") |> render_click()
+    assert has_element?(view, "#select-book-#{first.id}[aria-pressed=true]")
+    assert has_element?(view, "#inspector-book-title", "First")
+    assert has_element?(view, "#book-inspector", "205")
+    view |> element("#inspector-tab-notes") |> render_click()
+    assert has_element?(view, "#inspector-notes", "Remember this passage")
+    view |> element("#inspector-tab-metadata") |> render_click()
 
     assert has_element?(
              view,
-             "#summary-progress-volume",
-             "Words in progress"
+             "#inspector-refresh-metadata[href='/books/#{first.id}/edit?metadata=refresh']"
            )
 
-    assert has_element?(view, "#summary-progress-volume", "50,000")
-    refute has_element?(view, "#summary-progress-volume", "Pages in progress")
-
-    {finished_position, _length} = :binary.match(html, ~s(id="summary-books-finished"))
-    {words_position, _length} = :binary.match(html, ~s(id="words-completed"))
-    {in_progress_position, _length} = :binary.match(html, ~s(id="summary-books-in-progress"))
-
-    assert finished_position < words_position
-    assert words_position < in_progress_position
+    view |> element("#select-book-#{second.id}") |> render_click()
+    assert has_element?(view, "#inspector-book-title", "Second")
+    assert has_element?(view, "#inspector-tab-details[aria-pressed=true]")
+    refute has_element?(view, "#select-book-#{first.id}[aria-pressed=true]")
   end
 
-  test "falls back to pages when active books do not have word estimates", %{conn: conn} do
-    reading_log = Library.create_reading_log!("Spanish", "es", nil)
-
-    reading_log.id
-    |> Library.add_book!("First active book", %{page_count: 120})
-    |> Library.start_book!()
-
-    reading_log.id
-    |> Library.add_book!("Second active book", %{page_count: 80})
-    |> Library.start_book!()
-
-    {:ok, view, _html} = live(active_log(conn, reading_log), ~p"/dashboard")
-
-    assert has_element?(view, "#summary-progress-volume", "Pages in progress")
-    assert has_element?(view, "#summary-progress-volume", "200")
+  test "hides and reopens the inspector without navigating away", %{conn: conn} do
+    log = Library.create_reading_log!("Spanish", "es", nil)
+    book = Library.add_book!(log.id, "Covered book")
+    {:ok, view, _} = live(active_log(conn, log), ~p"/dashboard")
+    view |> element("#close-book-inspector") |> render_click()
+    refute has_element?(view, "#book-inspector")
+    assert has_element?(view, "#dashboard.is-inspector-closed")
+    view |> element("#select-book-#{book.id}") |> render_click()
+    assert has_element?(view, "#book-inspector")
+    view |> element("#toggle-book-inspector") |> render_click()
+    refute has_element?(view, "#book-inspector")
   end
 
-  test "notes when active books do not have word estimates or page counts", %{conn: conn} do
-    reading_log = Library.create_reading_log!("Spanish", "es", nil)
-    reading_log.id |> Library.add_book!("Active book") |> Library.start_book!()
-
-    {:ok, view, _html} = live(active_log(conn, reading_log), ~p"/dashboard")
-
-    assert has_element?(
-             view,
-             "#summary-progress-volume",
-             "Reading volume"
-           )
-
-    assert has_element?(view, "#summary-progress-volume", "Not set")
+  test "ignores attempts to inspect or change a book from another log", %{conn: conn} do
+    log = Library.create_reading_log!("Spanish", "es", nil)
+    other = Library.create_reading_log!("French", "fr", nil)
+    book = Library.add_book!(other.id, "Private to the other log")
+    {:ok, view, _} = live(active_log(conn, log), ~p"/dashboard?book=#{book.id}")
+    render_click(view, "select_book", %{"id" => book.id})
+    refute has_element?(view, "#inspector-book-title")
+    render_click(view, "update_status", %{"book_id" => book.id, "action" => "finish"})
+    assert Library.get_book!(book.id).status == :want_to_read
   end
 
-  test "shows the status controls appropriate for each book", %{conn: conn} do
-    reading_log = Library.create_reading_log!("Spanish", "es", 100_000)
-    want_to_read = Library.add_book!(reading_log.id, "Want")
-    in_progress = reading_log.id |> Library.add_book!("Reading") |> Library.start_book!()
-    finished = reading_log.id |> Library.add_book!("Done") |> Library.finish_book!()
-    abandoned = reading_log.id |> Library.add_book!("Paused") |> Library.abandon_book!()
-    conn = active_log(conn, reading_log)
+  test "pages the library and adapts the number of rows to available height", %{conn: conn} do
+    log = Library.create_reading_log!("Spanish", "es", nil)
+    for index <- 1..9, do: Library.add_book!(log.id, "Book #{index}")
+    {:ok, view, _} = live(active_log(conn, log), ~p"/dashboard")
 
-    {:ok, view, _html} = live(conn, ~p"/dashboard")
+    assert has_element?(view, "#book-list > [data-book-row]:nth-child(4)")
+    refute has_element?(view, "#book-list > [data-book-row]:nth-child(5)")
 
-    assert has_element?(view, "#book-#{want_to_read.id}-start", "Start")
-    assert has_element?(view, "#book-#{want_to_read.id}-finish", "Finish")
-    assert has_element?(view, "#book-#{in_progress.id}-finish", "Finish")
-    assert has_element?(view, "#book-#{in_progress.id}-abandon", "Abandon")
-    assert has_element?(view, "#book-#{finished.id}-reopen", "Reopen")
-    assert has_element?(view, "#book-#{abandoned.id}-reopen", "Reopen")
+    assert has_element?(view, "#book-page-range", "1–4 of 9 books")
+    view |> element("#next-book-page") |> render_click()
+    assert has_element?(view, "#book-page-range", "5–8 of 9 books")
+    render_hook(view, "resize_books", %{"rows" => 2})
+    assert has_element?(view, "#book-page-range", "5–6 of 9 books")
+    view |> element("#previous-book-page") |> render_click()
+    assert has_element?(view, "#book-page-range", "3–4 of 9 books")
+    render_hook(view, "resize_books", %{"rows" => 1000})
+    assert has_element?(view, "#book-page-range", "1–9 of 9 books")
   end
 
-  test "updates book status and summaries without leaving the page", %{conn: conn} do
-    reading_log = Library.create_reading_log!("Spanish", "es", 100_000)
-    book = Library.add_book!(reading_log.id, "Hola", %{estimated_words: 20_000})
-    conn = active_log(conn, reading_log)
+  test "a book query opens its page and inspector even when it is not on the first page", %{
+    conn: conn
+  } do
+    log = Library.create_reading_log!("Spanish", "es", nil)
+    target = Library.add_book!(log.id, "An older book")
+    for index <- 1..7, do: Library.add_book!(log.id, "Newer #{index}")
+    {:ok, view, _} = live(active_log(conn, log), ~p"/dashboard?book=#{target.id}")
+    assert has_element?(view, "#inspector-book-title", "An older book")
+    assert has_element?(view, "#select-book-#{target.id}[aria-pressed=true]")
+  end
 
-    {:ok, view, _html} = live(conn, ~p"/dashboard")
-
+  test "reading status actions update the book and summary in place", %{conn: conn} do
+    log = Library.create_reading_log!("Spanish", "es", 100_000)
+    book = Library.add_book!(log.id, "Hola", %{estimated_words: 20_000})
+    {:ok, view, _} = live(active_log(conn, log), ~p"/dashboard")
     view |> element("#book-#{book.id}-start") |> render_click()
-    assert has_element?(view, "#books-in_progress #book-#{book.id}")
-
+    assert Library.get_book!(book.id).status == :in_progress
+    assert has_element?(view, "#summary-books-in-progress", "1")
     view |> element("#book-#{book.id}-finish") |> render_click()
-    assert has_element?(view, "#books-finished #book-#{book.id}")
     assert has_element?(view, "#summary-books-finished", "1")
     assert has_element?(view, "#words-completed", "20,000")
     assert has_element?(view, "#goal-progress", "20%")
-
     view |> element("#book-#{book.id}-reopen") |> render_click()
     view |> element("#book-#{book.id}-abandon") |> render_click()
-    assert has_element?(view, "#books-abandoned #book-#{book.id}")
+    assert Library.get_book!(book.id).status == :abandoned
   end
 
-  test "searches books by title and author without a page reload", %{conn: conn} do
-    reading_log = Library.create_reading_log!("Spanish", "es", nil)
-
-    title_match =
-      Library.add_book!(reading_log.id, "Cien Anos de Soledad", %{
-        author: "Gabriel Garcia Marquez"
-      })
-
-    author_match =
-      Library.add_book!(reading_log.id, "La Casa", %{author: "ISABEL ALLENDE"})
-
-    hidden = Library.add_book!(reading_log.id, "El Principito", %{author: "Antoine"})
-
-    {:ok, view, _html} = live(active_log(conn, reading_log), ~p"/dashboard")
-
-    view
-    |> form("#book-search-form", search: %{query: "soledad"})
-    |> render_change()
-
-    assert has_element?(view, "#book-#{title_match.id}")
-    refute has_element?(view, "#book-#{author_match.id}")
-    refute has_element?(view, "#book-#{hidden.id}")
-
-    view
-    |> form("#book-search-form", search: %{query: "isabel"})
-    |> render_change()
-
-    assert has_element?(view, "#book-#{author_match.id}")
-    refute has_element?(view, "#book-#{title_match.id}")
-    refute has_element?(view, "#book-#{hidden.id}")
-  end
-
-  test "combines status filters with search", %{conn: conn} do
-    reading_log = Library.create_reading_log!("Spanish", "es", nil)
-
-    wanted = Library.add_book!(reading_log.id, "Spanish Stories")
+  test "search, status and difficulty filters combine and reset pagination", %{conn: conn} do
+    log = Library.create_reading_log!("Spanish", "es", nil)
+    wanted = Library.add_book!(log.id, "Spanish Stories", %{difficulty_label: "A1"})
 
     reading =
-      reading_log.id
-      |> Library.add_book!("More Spanish Stories")
+      Library.add_book!(log.id, "More Spanish Stories", %{
+        author: "ISABEL",
+        difficulty_label: "A1"
+      })
       |> Library.start_book!()
 
-    hidden = Library.add_book!(reading_log.id, "French Stories")
-
-    {:ok, view, _html} = live(active_log(conn, reading_log), ~p"/dashboard")
-
-    view
-    |> form("#book-search-form", search: %{query: "spanish"})
-    |> render_change()
-
-    view
-    |> element("#filter-in_progress")
-    |> render_click()
-
-    assert has_element?(view, "#filter-in_progress.bg-slate-950")
-    assert has_element?(view, "#books-in_progress #book-#{reading.id}")
-    refute has_element?(view, "#book-#{wanted.id}")
-    refute has_element?(view, "#book-#{hidden.id}")
-    refute has_element?(view, "#books-want_to_read")
-  end
-
-  test "filters by distinct difficulty values and combines with status", %{conn: conn} do
-    reading_log = Library.create_reading_log!("Spanish", "es", nil)
-
-    a1_wanted =
-      Library.add_book!(reading_log.id, "A1 Starter", %{difficulty_label: "A1"})
-
-    a1_reading =
-      reading_log.id
-      |> Library.add_book!("A1 Reader", %{difficulty_label: "A1"})
-      |> Library.start_book!()
-
-    b1_reading =
-      reading_log.id
-      |> Library.add_book!("B1 Reader", %{difficulty_label: "B1"})
-      |> Library.start_book!()
-
-    {:ok, view, _html} = live(active_log(conn, reading_log), ~p"/dashboard")
-
-    assert has_element?(view, "[aria-label='Filter books by difficulty']")
-    assert has_element?(view, "button[phx-value-difficulty='A1']", "A1")
-    assert has_element?(view, "button[phx-value-difficulty='B1']", "B1")
-
-    view
-    |> element("button[phx-value-difficulty='A1']")
-    |> render_click()
-
-    assert has_element?(view, "#book-#{a1_wanted.id}")
-    assert has_element?(view, "#book-#{a1_reading.id}")
-    refute has_element?(view, "#book-#{b1_reading.id}")
-
+    hidden = Library.add_book!(log.id, "French Stories", %{difficulty_label: "B1"})
+    {:ok, view, _} = live(active_log(conn, log), ~p"/dashboard")
+    view |> form("#book-search-form", search: %{query: "spanish"}) |> render_change()
+    assert has_element?(view, "#books-#{wanted.id}")
+    assert has_element?(view, "#books-#{reading.id}")
+    refute has_element?(view, "#books-#{hidden.id}")
     view |> element("#filter-in_progress") |> render_click()
-
-    refute has_element?(view, "#book-#{a1_wanted.id}")
-    assert has_element?(view, "#book-#{a1_reading.id}")
-    refute has_element?(view, "#book-#{b1_reading.id}")
-  end
-
-  test "shows a friendly empty state when no books match", %{conn: conn} do
-    reading_log = Library.create_reading_log!("Spanish", "es", nil)
-    Library.add_book!(reading_log.id, "El Principito")
-
-    {:ok, view, _html} = live(active_log(conn, reading_log), ~p"/dashboard")
-
-    view
-    |> form("#book-search-form", search: %{query: "missing"})
-    |> render_change()
-
+    assert has_element?(view, "#filter-in_progress[aria-pressed=true]")
+    refute has_element?(view, "#books-#{wanted.id}")
+    view |> form("#difficulty-filter-form", %{"difficulty" => "A1"}) |> render_change()
+    assert has_element?(view, "#books-#{reading.id}")
+    view |> form("#book-search-form", search: %{query: "isabel"}) |> render_change()
+    assert has_element?(view, "#books-#{reading.id}")
+    view |> form("#book-search-form", search: %{query: "missing"}) |> render_change()
     assert has_element?(view, "#no-matching-books", "No books match this search.")
-    refute has_element?(view, "#books-want_to_read")
+    refute has_element?(view, "#inspector-book-title")
   end
 
-  defp active_log(conn, reading_log) do
-    init_test_session(conn, %{"active_reading_log_id" => reading_log.id})
+  test "opens and closes detailed progress in the central workspace", %{conn: conn} do
+    log = Library.create_reading_log!("Spanish", "es", 100_000)
+    Library.add_book!(log.id, "Done", %{estimated_words: 16_000}) |> Library.finish_book!()
+    Library.add_book!(log.id, "Reading", %{estimated_words: 20_000}) |> Library.start_book!()
+    {:ok, view, _} = live(active_log(conn, log), ~p"/dashboard")
+    refute has_element?(view, "#reading-progress-panel")
+    render_patch(view, ~p"/dashboard?view=progress")
+    assert has_element?(view, "#word-goal-card", "100 thousand words")
+    assert has_element?(view, "#summary-progress-volume", "20,000")
+    assert has_element?(view, "#summary-progress-volume", "Words in progress")
+    assert has_element?(view, "#dashboard-export-database[href='/backup/database']")
+    render_patch(view, ~p"/dashboard")
+    refute has_element?(view, "#reading-progress-panel")
   end
 
-  defp put_legacy_cover(book, attributes) do
-    changeset = Ash.Changeset.for_update(book, :edit)
-
-    attributes
-    |> Enum.reduce(changeset, fn {attribute, value}, changeset ->
-      Ash.Changeset.force_change_attribute(changeset, attribute, value)
-    end)
-    |> Ash.update!()
-  end
+  defp active_log(conn, log), do: init_test_session(conn, %{"active_reading_log_id" => log.id})
 end

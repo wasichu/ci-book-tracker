@@ -10,12 +10,11 @@ defmodule CiBookTrackerWeb.HomeLiveTest do
 
     assert has_element?(view, "#reading-log-selector")
     assert has_element?(view, "#empty-reading-logs", "No reading logs yet")
-    assert has_element?(view, "#new-reading-log", "Start Tracking")
     assert has_element?(view, "#new-reading-log", "Create a new reading log")
     assert has_element?(view, "#create-reading-log", "Create New Reading Log")
     assert has_element?(view, "#create-reading-log[href='/reading-logs/new']")
-    assert has_element?(view, "#existing-reading-logs", "Continue Tracking")
-    assert has_element?(view, "#existing-reading-logs", "Existing reading logs")
+    assert has_element?(view, "#existing-reading-logs", "Continue reading")
+    assert has_element?(view, "#existing-reading-logs", "Continue reading")
   end
 
   test "lists all reading logs with human-readable details", %{conn: conn} do
@@ -24,7 +23,7 @@ defmodule CiBookTrackerWeb.HomeLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/")
 
-    assert has_element?(view, "#existing-reading-logs", "Continue Tracking")
+    assert has_element?(view, "#existing-reading-logs", "Continue reading")
     assert has_element?(view, "#reading-log-#{french.id}", "French novels")
     assert has_element?(view, "#reading-log-#{french.id}", "French")
     assert has_element?(view, "#reading-log-#{french.id}", "(fr)")
@@ -49,6 +48,19 @@ defmodule CiBookTrackerWeb.HomeLiveTest do
     conn = init_test_session(conn, %{"auto_open_reading_log_id" => reading_log.id})
 
     assert {:error, {:live_redirect, %{to: "/dashboard"}}} = live(conn, ~p"/")
+  end
+
+  test "the brand returns to the selector even with auto-open enabled", %{conn: conn} do
+    reading_log = Library.create_reading_log!("Spanish", "es", nil)
+    conn = init_test_session(conn, %{"auto_open_reading_log_id" => reading_log.id})
+    {:ok, view, _html} = live(conn, ~p"/dashboard")
+    assert has_element?(view, "#workspace-home[href='/?logs=all']")
+
+    {:ok, home, _html} =
+      view |> element("#workspace-home") |> render_click() |> follow_redirect(conn)
+
+    assert has_element?(home, "#reading-log-selector")
+    assert has_element?(home, "#open-reading-log-#{reading_log.id}")
   end
 
   test "ignores a stale auto-open preference", %{conn: conn} do

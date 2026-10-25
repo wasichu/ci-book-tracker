@@ -80,7 +80,7 @@ defmodule CiBookTrackerWeb.BookLive.Import do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} workspace={@workspace}>
       <section id="book-import-page" class="space-y-7">
         <header>
           <.link
@@ -105,9 +105,6 @@ defmodule CiBookTrackerWeb.BookLive.Import do
           class="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60 sm:p-7"
         >
           <div class="flex items-start gap-3">
-            <span class="grid size-11 shrink-0 place-items-center rounded-2xl bg-amber-100 text-amber-800">
-              <.icon name="hero-document-arrow-up" class="size-5" />
-            </span>
             <div>
               <h2 class="text-lg font-semibold text-slate-950">Choose a CSV file</h2>
               <p class="mt-1 text-sm leading-6 text-slate-600">
@@ -127,8 +124,7 @@ defmodule CiBookTrackerWeb.BookLive.Import do
               for={@uploads.csv.ref}
               class="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-5 text-center transition hover:border-amber-500 hover:bg-amber-50/60"
             >
-              <.icon name="hero-arrow-up-tray" class="size-7 text-slate-500" />
-              <span class="mt-3 font-semibold text-slate-900">Select a CSV file</span>
+              <span class="font-semibold text-slate-900">Select a CSV file</span>
               <span class="mt-1 text-sm text-slate-500">or drop it here</span>
               <.live_file_input upload={@uploads.csv} class="sr-only" />
             </label>
@@ -169,9 +165,9 @@ defmodule CiBookTrackerWeb.BookLive.Import do
               type="submit"
               id="preview-import"
               phx-disable-with="Reading CSV..."
-              class="flex min-h-12 w-full items-center justify-center rounded-xl bg-slate-950 px-5 font-semibold text-white transition hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 sm:w-auto"
+              class="workspace-button workspace-primary"
             >
-              Import
+              <.icon name="hero-arrow-up-tray" class="size-4" /> Import
             </.button>
           </.form>
         </section>
@@ -258,7 +254,7 @@ defmodule CiBookTrackerWeb.BookLive.Import do
             id="confirm-import"
             phx-click="confirm_import"
             phx-disable-with="Importing books..."
-            class="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-amber-600 px-5 font-semibold text-white transition hover:-translate-y-0.5 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0"
+            class="workspace-button workspace-primary"
           >
             <.icon name="hero-check" class="size-5" />
             Import {@preview.valid_count} {if @preview.valid_count == 1, do: "book", else: "books"}
@@ -283,7 +279,7 @@ defmodule CiBookTrackerWeb.BookLive.Import do
           </ul>
           <.link
             navigate={~p"/dashboard"}
-            class="mt-5 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-900 px-5 font-semibold text-white transition hover:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+            class="workspace-button workspace-primary mt-5"
           >
             View reading log <.icon name="hero-arrow-right" class="size-4" />
           </.link>
@@ -306,7 +302,7 @@ defmodule CiBookTrackerWeb.BookLive.Import do
               type="button"
               phx-hook="ClipboardCopy"
               data-copy-text="title,author,status,page_count,estimated_words,difficulty_label,started_on,finished_on,notes"
-              class="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+              class="workspace-button workspace-primary mt-3"
             >
               <.icon name="hero-clipboard-document" class="size-4" />
               <span data-copy-label>Copy header</span>

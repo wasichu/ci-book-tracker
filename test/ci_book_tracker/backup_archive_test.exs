@@ -45,6 +45,64 @@ defmodule CiBookTracker.BackupArchiveTest do
     assert {:error, :unsafe_archive} = BackupArchive.stage(archive_path, fn _path -> :ok end)
   end
 
+  test "rejects an export whose database and covers together exceed the restore limit" do
+    directory = temporary_directory()
+    File.mkdir_p!(Path.join(directory, "covers"))
+    on_exit(fn -> File.rm_rf(directory) end)
+    database = Path.join(directory, "source.db")
+    archive = Path.join(directory, "backup.zip")
+    write_sparse_file(database, BackupArchive.max_bytes())
+    File.write!(Path.join(directory, "covers/cover.jpg"), "cover")
+
+    assert {:error, :backup_too_large} =
+             BackupArchive.create(archive, database, Path.join(directory, "covers"))
+
+    refute File.exists?(archive)
+    assert File.stat!(database).size == BackupArchive.max_bytes()
+  end
+
+  test "rejects oversized ZIP and legacy database files before processing them" do
+    directory = temporary_directory()
+    File.mkdir_p!(directory)
+    on_exit(fn -> File.rm_rf(directory) end)
+    path = Path.join(directory, "oversized.backup")
+    write_sparse_file(path, BackupArchive.max_bytes() + 1)
+
+    assert {:error, :backup_too_large} =
+             BackupArchive.stage(path, fn _ -> flunk("must reject before staging") end)
+
+    assert {:error, :backup_too_large} = CiBookTracker.DatabaseRestore.stage(path)
+  end
+
+  test "rejects small ZIP files with oversized expanded contents before extraction" do
+    directory = temporary_directory()
+    File.mkdir_p!(directory)
+    on_exit(fn -> File.rm_rf(directory) end)
+    path = Path.join(directory, "expanded.zip")
+    {:ok, _} = :zip.create(String.to_charlist(path), [{~c"reading_log.db", "database"}])
+
+    # Change the central directory's expanded size without allocating a large fixture.
+    zip = File.read!(path)
+    {central_directory, _} = :binary.match(zip, <<0x50, 0x4B, 0x01, 0x02>>)
+    size_offset = central_directory + 24
+    <<prefix::binary-size(^size_offset), _old_size::little-32, suffix::binary>> = zip
+
+    File.write!(
+      path,
+      <<prefix::binary, BackupArchive.max_bytes() + 1::little-32, suffix::binary>>
+    )
+
+    assert {:error, :backup_too_large} =
+             BackupArchive.stage(path, fn _ -> flunk("must reject before extraction") end)
+  end
+
+  defp write_sparse_file(path, size) do
+    File.open!(path, [:write, :binary], fn file ->
+      {:ok, _} = :file.position(file, size - 1)
+      IO.binwrite(file, <<0>>)
+    end)
+  end
+
   defp temporary_directory do
     Path.join(
       System.tmp_dir!(),

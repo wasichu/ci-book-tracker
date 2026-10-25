@@ -34,6 +34,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
        |> assign(:metadata_provider_options, metadata_provider_options())
        |> assign(:metadata_provider, "open_library")
        |> assign(:metadata_refresh?, metadata_refresh?)
+       |> assign(:form_tab, if(metadata_refresh?, do: "metadata", else: "book"))
        |> assign(:metadata_query, FormParams.initial_metadata_query(book, metadata_refresh?))
        |> assign(:metadata_results, [])
        |> assign(:metadata_status, :idle)
@@ -65,6 +66,22 @@ defmodule CiBookTrackerWeb.BookLive.Form do
      |> update_estimator(event["estimator"])}
   end
 
+  def handle_event("select_form_tab", %{"tab" => tab}, socket)
+      when tab in ~w(book cover estimate history notes metadata) do
+    socket =
+      if tab == "metadata" && socket.assigns.book && socket.assigns.metadata_query == "" do
+        assign(
+          socket,
+          :metadata_query,
+          FormParams.initial_metadata_query(socket.assigns.book, true)
+        )
+      else
+        socket
+      end
+
+    {:noreply, assign(socket, :form_tab, tab)}
+  end
+
   def handle_event("enter_word_estimate", _params, socket) do
     params = Map.put(socket.assigns.form.params, "estimated_words_mode", "manual")
     {:noreply, assign(socket, :form, to_form(params, as: :book))}
@@ -78,7 +95,8 @@ defmodule CiBookTrackerWeb.BookLive.Form do
           |> Map.put("estimated_words", Integer.to_string(estimate))
           |> Map.put("estimated_words_mode", "manual")
 
-        {:noreply, assign(socket, :form, to_form(params, as: :book))}
+        {:noreply,
+         socket |> assign(:form, to_form(params, as: :book)) |> assign(:form_tab, "book")}
 
       _invalid ->
         {:noreply, socket}
@@ -99,7 +117,7 @@ defmodule CiBookTrackerWeb.BookLive.Form do
           errors: [title: {"can't be blank", []}]
         )
 
-      {:noreply, assign(socket, :form, form)}
+      {:noreply, socket |> assign(:form, form) |> assign(:form_tab, "book")}
     else
       prepare_and_save_book(socket, params)
     end
@@ -251,50 +269,63 @@ defmodule CiBookTrackerWeb.BookLive.Form do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
-      <section id="add-book-page" class="space-y-7">
-        <header>
-          <.link
-            navigate={back_path(@book)}
-            class="inline-flex min-h-11 items-center gap-2 rounded-xl pr-3 text-sm font-semibold text-slate-600 transition hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
-          >
-            <.icon name="hero-arrow-left" class="size-4" /> Back to dashboard
-          </.link>
-
-          <p class="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
-            {@reading_log.name}
-          </p>
-          <h1 class="mt-2 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-            {form_heading(@book)}
-          </h1>
-          <p class="mt-3 max-w-xl text-base leading-7 text-slate-600">
-            {form_intro(@book)}
-          </p>
+    <Layouts.app flash={@flash} workspace={@workspace}>
+      <section id="add-book-page" class="workspace-editor">
+        <header class="workspace-editor-heading">
+          <.link navigate={back_path(@book)} class="workspace-button workspace-quiet"><.icon
+            name="hero-arrow-left"
+            class="size-4"
+          /> Back to library</.link>
+          <p class="workspace-eyebrow mt-5">{@reading_log.name}</p>
+          <h1>{form_heading(@book)}</h1>
+          <p class="workspace-muted mt-2">{form_intro(@book)}</p>
         </header>
-
-        <FormComponents.metadata_search
-          :if={is_nil(@book) || @metadata_refresh?}
-          book={@book}
-          query={@metadata_query}
-          provider={@metadata_provider}
-          provider_options={@metadata_provider_options}
-          results={@metadata_results}
-          status={@metadata_status}
-          message={@metadata_message}
-          pending_metadata={@pending_metadata}
-          selected_cover_result_id={@selected_cover_result_id}
-          book_form_id={form_id(@book)}
-          save_label={save_label(@book)}
-        />
-
+        <nav class="workspace-tabs workspace-editor-tabs" aria-label="Book editor sections">
+          <button
+            :for={
+              {tab, label} <- [
+                {"book", "Book"},
+                {"cover", "Cover"},
+                {"estimate", "Word estimate"},
+                {"history", "Reading dates"},
+                {"notes", "Notes"},
+                {"metadata", "Find metadata"}
+              ]
+            }
+            id={"editor-tab-#{tab}"}
+            type="button"
+            phx-click="select_form_tab"
+            phx-value-tab={tab}
+            aria-pressed={to_string(@form_tab == tab)}
+            class={[@form_tab == tab && "is-active"]}
+          >{label}</button>
+        </nav>
+        <div id="editor-panel-metadata" hidden={@form_tab != "metadata"}>
+          <FormComponents.metadata_search
+            book={@book}
+            query={@metadata_query}
+            provider={@metadata_provider}
+            provider_options={@metadata_provider_options}
+            results={@metadata_results}
+            status={@metadata_status}
+            message={@metadata_message}
+            pending_metadata={@pending_metadata}
+            selected_cover_result_id={@selected_cover_result_id}
+            book_form_id={form_id(@book)}
+            save_label={save_label(@book)}
+          />
+        </div>
         <.form
           for={@form}
           id={form_id(@book)}
           phx-change="validate"
           phx-submit="save"
-          class="space-y-6 rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60 sm:p-8"
+          novalidate
+          hidden={@form_tab == "metadata"}
+          class="workspace-editor-form"
         >
           <FormComponents.book_fields
+            active_tab={@form_tab}
             form={@form}
             book={@book}
             estimator_form={@estimator_form}

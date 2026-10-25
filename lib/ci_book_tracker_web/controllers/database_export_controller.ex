@@ -1,7 +1,7 @@
 defmodule CiBookTrackerWeb.DatabaseExportController do
   use CiBookTrackerWeb, :controller
 
-  alias CiBookTracker.DatabaseBackup
+  alias CiBookTracker.{BackupArchive, DatabaseBackup}
 
   def download(conn, _params) do
     send_backup(conn, DatabaseBackup.create_archive())
@@ -27,6 +27,19 @@ defmodule CiBookTrackerWeb.DatabaseExportController do
 
       {:error, :not_found} ->
         backup_not_found(conn)
+
+      {:error, :backup_too_large} ->
+        conn
+        |> put_flash(
+          :error,
+          "The backup exceeds the #{BackupArchive.limit_label()} limit for the ZIP file or its expanded contents. Export was cancelled; your library has not changed."
+        )
+        |> redirect(to: ~p"/backup")
+
+      {:error, _reason} ->
+        conn
+        |> put_flash(:error, "We couldn't create a backup. Please try again.")
+        |> redirect(to: ~p"/backup")
     end
   end
 

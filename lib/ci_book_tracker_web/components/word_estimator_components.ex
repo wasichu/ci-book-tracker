@@ -132,7 +132,7 @@ defmodule CiBookTrackerWeb.WordEstimatorComponents do
             type="button"
             phx-click={@apply_event}
             disabled={is_nil(@result.estimated_words)}
-            class="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white transition hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
+            class="workspace-button workspace-primary"
           >
             <.icon name="hero-arrow-up-tray" class="size-4" /> Apply Estimate
           </button>
