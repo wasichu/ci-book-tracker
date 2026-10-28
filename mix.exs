@@ -36,7 +36,7 @@ defmodule CiBookTracker.MixProject do
 
   defp usage_rules do
     [
-      file: "AGENTS.md",
+      file: "docs/agent-reference/framework-rules.md",
       usage_rules: :all
     ]
   end
