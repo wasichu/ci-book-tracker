@@ -45,6 +45,12 @@ jobs:
         with:
           version-file: .tool-versions
           version-type: strict
+      - uses: actions/cache@v6
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ matrix.target }}-release-${{ hashFiles('.tool-versions', 'mix.lock') }}
       - run: mix deps.get --only prod --check-locked
       - name: Check release version
         id: version
@@ -59,7 +65,7 @@ jobs:
       - run: mix compile --warnings-as-errors
       - run: mix assets.setup
       - run: mix assets.deploy
-      - run: mix release
+      - run: mix release --overwrite
       - name: Package and test relocated release
         shell: bash
         env:
@@ -72,7 +78,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/relocated app"
           tar -xzf "dist/ci-book-tracker-$VERSION-$TARGET.tar.gz" -C "$RUNNER_TEMP/relocated app"
           python3 scripts/smoke_release.py "$RUNNER_TEMP/relocated app"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-${{ matrix.target }}
           path: dist/*.tar.gz
@@ -86,7 +92,7 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: release-*
           path: dist

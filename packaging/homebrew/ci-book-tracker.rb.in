@@ -1,7 +1,8 @@
 class CiBookTracker < Formula
   desc "Local-first reading tracker for language learners"
   homepage "https://github.com/wasichu/ci-book-tracker"
-  version "@VERSION@"
+  url "https://github.com/wasichu/ci-book-tracker/releases/download/v@VERSION@/ci-book-tracker-@VERSION@-linux-x86_64.tar.gz"
+  sha256 "@LINUX_X86_64_SHA256@"
   license "MIT"
 
   on_macos do
@@ -20,24 +21,42 @@ class CiBookTracker < Formula
   end
 
   on_linux do
+    depends_on "patchelf" => :build
     depends_on arch: :x86_64
-
-    on_intel do
-      url "https://github.com/wasichu/ci-book-tracker/releases/download/v@VERSION@/ci-book-tracker-@VERSION@-linux-x86_64.tar.gz"
-      sha256 "@LINUX_X86_64_SHA256@"
-    end
+    depends_on "ncurses"
+    depends_on "openssl@3"
+    depends_on "zlib"
   end
 
   def install
     libexec.install Dir["*"]
-    (bin/"ci-book-tracker").write_exec_script libexec/"bin/ci-book-tracker"
+    bin.write_exec_script libexec/"bin/ci-book-tracker"
+
+    if OS.linux?
+      # The upstream archive uses Ubuntu libraries. Prefer the matching Homebrew
+      # libraries when installing through this formula, including after bottling.
+      libraries = %w[ncurses openssl@3 zlib].map { |name| formula_opt_lib(name).to_s }
+      libexec.glob("**/*").select(&:file?).each do |file|
+        next if file.binread(4) != "\x7FELF"
+
+        # Homebrew exposes the terminfo API in its combined ncurses library.
+        needed = Utils.safe_popen_read("patchelf", "--print-needed", file).lines.map(&:strip)
+        if needed.include?("libtinfo.so.6")
+          system "patchelf", "--replace-needed", "libtinfo.so.6", "libncursesw.so.6", file
+        end
+
+        original_rpath = Utils.safe_popen_read("patchelf", "--print-rpath", file).strip
+        rpath = (libraries + original_rpath.split(":")).reject(&:empty?).uniq.join(":")
+        system "patchelf", "--set-rpath", rpath, file
+      end
+    end
   end
 
   def caveats
     <<~EOS
       Run ci-book-tracker, then open http://localhost:4000.
       Data and the automatically generated session secret live in your user data directory.
-      Linux packages require Ubuntu 24.04 or compatible glibc 2.39+, OpenSSL 3 and ncurses 6.
+      Linux packages require Ubuntu 24.04 or compatible glibc 2.39+.
     EOS
   end
 
@@ -47,7 +66,7 @@ class CiBookTracker < Formula
     pid = spawn({ "PORT" => port.to_s, "CI_BOOK_TRACKER_DATA_DIR" => testpath.to_s,
                   "DATABASE_PATH" => (testpath/"reading_log.db").to_s,
                   "SECRET_KEY_BASE" => "a" * 64 },
-                bin/"ci-book-tracker", out: testpath/"server.log", err: [:child, :out])
+                (bin/"ci-book-tracker").to_s, out: (testpath/"server.log").to_s, err: [:child, :out])
     begin
       sleep 1
       response = shell_output("curl --fail --silent --retry 30 --retry-connrefused " \

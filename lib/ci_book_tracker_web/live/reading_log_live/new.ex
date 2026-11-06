@@ -61,9 +61,9 @@ defmodule CiBookTrackerWeb.ReadingLogLive.New do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
-      <section id={page_id(@reading_log)} class="space-y-7">
-        <header>
+    <Layouts.app flash={@flash} workspace={@workspace}>
+      <section id={page_id(@reading_log)} class="log-editor">
+        <header class="workspace-editor-heading">
           <.link
             navigate={@return_path}
             class="inline-flex min-h-11 items-center gap-2 rounded-xl pr-3 text-sm font-semibold text-slate-600 transition hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
@@ -87,27 +87,31 @@ defmodule CiBookTrackerWeb.ReadingLogLive.New do
           id={form_id(@reading_log)}
           phx-change="validate"
           phx-submit="save"
-          class="space-y-6 rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60 sm:p-8"
+          class="log-editor-form"
         >
-          <.input
-            field={@form[:name]}
-            label="Name"
-            placeholder="Spanish reading"
-            required
-            autocomplete="off"
-          />
+          <div class="log-editor-identity">
+            <.input
+              field={@form[:name]}
+              label="Name"
+              placeholder="Spanish reading"
+              required
+              autocomplete="off"
+            />
 
-          <.input
-            field={@form[:language_code]}
-            type="select"
-            label="Language"
-            options={@language_options}
-            required
-          />
+            <.input
+              field={@form[:language_code]}
+              type="select"
+              label="Language"
+              options={@language_options}
+              required
+            />
+          </div>
 
           <fieldset>
-            <legend class="text-sm font-medium text-slate-700">Word goal</legend>
-            <div class="mt-1.5 grid grid-cols-[minmax(0,1fr)_minmax(9rem,0.8fr)] gap-3">
+            <legend class="text-sm font-medium text-slate-700">
+              Word goal <span class="workspace-muted font-normal">(optional)</span>
+            </legend>
+            <div class="log-editor-identity mt-1.5">
               <.input
                 field={@form[:goal_amount]}
                 type="number"
@@ -124,26 +128,23 @@ defmodule CiBookTrackerWeb.ReadingLogLive.New do
                 options={@goal_units}
               />
             </div>
-            <p class="-mt-2 text-xs leading-5 text-slate-500">
-              Optional.
-            </p>
           </fieldset>
 
           <div
             :if={is_nil(@reading_log)}
-            class="rounded-2xl bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950"
+            class="log-editor-hint"
           >
             <div class="flex gap-3">
-              <.icon name="hero-light-bulb" class="mt-1 size-4 shrink-0 text-amber-700" />
+              <.icon name="hero-light-bulb" class="mt-0.5 size-4 shrink-0" />
               <p>
-                Pick a goal that feels useful, not perfect. You can start tracking without one.
+                You can leave the goal blank and add one later.
               </p>
             </div>
           </div>
 
           <div
             :if={is_nil(@reading_log)}
-            class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4"
+            class="log-editor-preference"
           >
             <.input
               field={@form[:auto_open]}
@@ -151,17 +152,17 @@ defmodule CiBookTrackerWeb.ReadingLogLive.New do
               label="Automatically open this log next time"
             />
             <p class="-mt-2 pl-7 text-xs leading-5 text-slate-500">
-              You can always use Switch Log from the dashboard to choose another log.
+              Use the reading logs in the sidebar to switch at any time.
             </p>
           </div>
 
-          <div class="border-t border-slate-100 pt-6">
+          <div class="log-editor-footer">
             <.button
               id="save-reading-log"
               type="submit"
               variant="primary"
               phx-disable-with={saving_label(@reading_log)}
-              class="flex min-h-16 w-full items-center justify-center gap-3 rounded-2xl bg-amber-700 px-6 text-base font-semibold text-white shadow-lg shadow-amber-900/15 transition hover:-translate-y-0.5 hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0 disabled:translate-y-0"
+              class="workspace-button workspace-primary"
             >
               <.icon name="hero-language" class="size-5" /> {save_label(@reading_log)}
             </.button>
@@ -326,8 +327,8 @@ defmodule CiBookTrackerWeb.ReadingLogLive.New do
   defp intro(_reading_log),
     do: "Update this log's name, language, or optional word goal."
 
-  defp save_label(nil), do: "Create Reading Log"
-  defp save_label(_reading_log), do: "Save Changes"
+  defp save_label(nil), do: "Create reading log"
+  defp save_label(_reading_log), do: "Save changes"
   defp saving_label(nil), do: "Creating..."
   defp saving_label(_reading_log), do: "Saving..."
 end

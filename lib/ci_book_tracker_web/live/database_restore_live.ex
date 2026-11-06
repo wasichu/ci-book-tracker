@@ -1,7 +1,7 @@
 defmodule CiBookTrackerWeb.DatabaseRestoreLive do
   use CiBookTrackerWeb, :live_view
 
-  alias CiBookTracker.DatabaseRestore
+  alias CiBookTracker.{BackupArchive, DatabaseRestore}
   alias CiBookTracker.Library
   alias CiBookTrackerWeb.{ReadingLogSession, RestoreState}
 
@@ -10,6 +10,8 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
     {:ok,
      socket
      |> assign(:page_title, "Restore backup")
+     |> assign(:backup_limit_label, BackupArchive.limit_label())
+     |> assign(:backup_directory, DatabaseRestore.backup_directory())
      |> assign(:requires_confirmation?, open_log_has_books?(session))
      |> assign(:restore, %RestoreState{})
      |> allow_upload(:database,
@@ -17,7 +19,7 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
        max_entries: 1,
        auto_upload: true,
        progress: &handle_upload_progress/3,
-       max_file_size: 250_000_000
+       max_file_size: BackupArchive.max_bytes()
      )}
   end
 
@@ -80,7 +82,7 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} workspace={@workspace}>
       <section id="database-restore-page" class="space-y-7">
         <header>
           <.link
@@ -105,21 +107,12 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
           id="restore-upload"
           class="rounded-[2rem] border border-rose-200 bg-white p-5 shadow-sm shadow-rose-100/60 sm:p-7"
         >
-          <div
-            :if={@requires_confirmation?}
-            id="restore-export-warning"
-            class="rounded-2xl bg-amber-50 p-4 text-sm leading-6 text-amber-950"
-          >
-            <p class="font-semibold">Export your current database before continuing.</p>
-            <p class="mt-1">
-              The app also creates an automatic safety backup immediately before restoring.
+          <div id="restore-backup-guidance" class="workspace-muted text-sm leading-6">
+            <p>
+              Your current database and cover images are backed up automatically before anything is replaced.
             </p>
-            <.link
-              href={~p"/backup/database"}
-              class="mt-3 inline-flex min-h-11 items-center gap-2 font-semibold text-amber-900 underline decoration-amber-400 underline-offset-4"
-            >
-              <.icon name="hero-arrow-down-tray" class="size-4" /> Export current database
-            </.link>
+            <p class="mt-2">Automatic backup folder:</p>
+            <code class="block break-all text-xs leading-6">{@backup_directory}</code>
           </div>
 
           <.form
@@ -136,7 +129,7 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
               <.icon name="hero-circle-stack" class="size-7 text-slate-500" />
               <span class="mt-3 font-semibold text-slate-900">Select a backup</span>
               <span class="mt-1 text-sm text-slate-500">
-                .zip, .db, .sqlite, or .sqlite3 up to 250 MB
+                Backup files: .zip, .db, .sqlite, or .sqlite3. Limit: {@backup_limit_label} for the file and its expanded contents.
               </span>
               <.live_file_input upload={@uploads.database} class="sr-only" />
             </label>
@@ -159,10 +152,6 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
 
             <p :if={@restore.error} class="text-sm font-medium text-rose-700">
               {@restore.error}
-            </p>
-
-            <p class="text-sm text-slate-500" role="status">
-              Your backup uploads and validates automatically after selection.
             </p>
           </.form>
 
@@ -188,9 +177,9 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
                 id="restore-backup-button"
                 phx-click="restore_database"
                 phx-disable-with="Restoring..."
-                class="min-h-12 rounded-xl bg-slate-950 px-5 font-semibold text-white transition hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+                class="workspace-button workspace-primary"
               >
-                Restore Backup
+                Restore backup
               </button>
               <button
                 type="button"
@@ -249,7 +238,7 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
               data-confirm="Restore this backup and replace all current data?"
               class="min-h-14 rounded-2xl bg-rose-700 px-5 font-semibold text-white shadow-lg shadow-rose-900/15 transition hover:bg-rose-800 focus:outline-none focus:ring-2 focus:ring-rose-600 focus:ring-offset-2"
             >
-              Restore Backup
+              Restore backup
             </button>
           </div>
         </section>
@@ -267,7 +256,7 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
             Restore complete. Please restart CI Book Tracker.
           </p>
           <p class="mt-3 break-all text-sm leading-6 text-emerald-800">
-            Safety backup: {@restore.result.backup_path}
+            Your data before this restore was saved to: {@restore.result.backup_path}
           </p>
         </section>
       </section>
@@ -329,7 +318,7 @@ defmodule CiBookTrackerWeb.DatabaseRestoreLive do
     end
   end
 
-  defp upload_error(:too_large), do: "The backup is larger than 250 MB."
+  defp upload_error(:too_large), do: DatabaseRestore.error_message(:backup_too_large)
   defp upload_error(:not_accepted), do: "Choose a .zip, .db, .sqlite, or .sqlite3 file."
   defp upload_error(:too_many_files), do: "Choose only one backup file."
   defp upload_error(_error), do: "The backup could not be uploaded."

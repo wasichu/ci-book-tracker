@@ -9,6 +9,7 @@ defmodule CiBookTrackerWeb.ReadingLogSessionControllerTest do
     conn = get(conn, ~p"/reading-logs/#{reading_log.id}/open")
 
     assert redirected_to(conn) == "/dashboard"
+    assert is_nil(Phoenix.Flash.get(conn.assigns.flash, :info))
     assert get_session(conn, :active_reading_log_id) == reading_log.id
     assert is_nil(get_session(conn, :auto_open_reading_log_id))
   end

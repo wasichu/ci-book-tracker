@@ -50,17 +50,11 @@ defmodule CiBookTrackerWeb.CoreComponents do
     <div
       :if={msg = render_slot(@inner_block) || Phoenix.Flash.get(@flash, @kind)}
       id={@id}
-      phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
-      phx-hook={@kind == :info && "AutoDismissFlash"}
       role="alert"
-      class="fixed right-4 top-4 z-50 transition-opacity duration-200"
+      class="workspace-notice"
       {@rest}
     >
-      <div class={[
-        "flex w-80 max-w-[calc(100vw-2rem)] items-start gap-3 rounded-2xl border p-4 text-sm shadow-lg",
-        @kind == :info && "border-sky-200 bg-sky-50 text-sky-950",
-        @kind == :error && "border-rose-200 bg-rose-50 text-rose-950"
-      ]}>
+      <div class="workspace-notice-content">
         <.icon :if={@kind == :info} name="hero-information-circle" class="size-5 shrink-0" />
         <.icon :if={@kind == :error} name="hero-exclamation-circle" class="size-5 shrink-0" />
         <div>
@@ -68,7 +62,12 @@ defmodule CiBookTrackerWeb.CoreComponents do
           <p>{msg}</p>
         </div>
         <div class="flex-1" />
-        <button type="button" class="group self-start cursor-pointer" aria-label={gettext("close")}>
+        <button
+          type="button"
+          phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
+          class="workspace-icon-button ml-auto"
+          aria-label={gettext("Dismiss error")}
+        >
           <.icon name="hero-x-mark" class="size-5 opacity-40 group-hover:opacity-70" />
         </button>
       </div>

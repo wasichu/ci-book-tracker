@@ -4,7 +4,7 @@ defmodule CiBookTracker.MixProject do
   def project do
     [
       app: :ci_book_tracker,
-      version: "0.1.0",
+      version: "0.2.0",
       releases: [ci_book_tracker: [include_erts: true]],
       elixir: "~> 1.20.4",
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -36,7 +36,7 @@ defmodule CiBookTracker.MixProject do
 
   defp usage_rules do
     [
-      file: "AGENTS.md",
+      file: "docs/agent-reference/framework-rules.md",
       usage_rules: :all
     ]
   end
@@ -71,7 +71,7 @@ defmodule CiBookTracker.MixProject do
        depth: 1},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
-      {:gettext, "~> 0.26"},
+      {:gettext, "~> 1.0"},
       {:jason, "~> 1.2"},
       {:req, "~> 0.5"},
       {:dns_cluster, "~> 0.2.0"},
@@ -88,9 +88,14 @@ defmodule CiBookTracker.MixProject do
   defp aliases do
     [
       setup: ["deps.get", "ash.setup", "assets.setup", "assets.build"],
-      "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
-      "assets.build": ["compile", "tailwind ci_book_tracker", "esbuild ci_book_tracker"],
+      "assets.setup": [
+        "compile",
+        "assets.install_tailwind --if-missing",
+        "esbuild.install --if-missing"
+      ],
+      "assets.build": ["assets.setup", "tailwind ci_book_tracker", "esbuild ci_book_tracker"],
       "assets.deploy": [
+        "assets.setup",
         "tailwind ci_book_tracker --minify",
         "esbuild ci_book_tracker --minify",
         "phx.digest"

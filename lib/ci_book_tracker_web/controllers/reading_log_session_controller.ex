@@ -9,7 +9,6 @@ defmodule CiBookTrackerWeb.ReadingLogSessionController do
         conn
         |> put_session(:active_reading_log_id, reading_log.id)
         |> update_auto_open(reading_log.id, params["auto_open"])
-        |> put_flash(:info, "#{reading_log.name} is open.")
         |> redirect(to: ~p"/dashboard")
 
       {:error, _error} ->

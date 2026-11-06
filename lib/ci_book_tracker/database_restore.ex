@@ -22,10 +22,12 @@ defmodule CiBookTracker.DatabaseRestore do
   @spec stage(String.t()) ::
           {:ok, String.t() | StagedBackup.t()} | {:error, validation_error() | term()}
   def stage(source_path) do
-    case DatabaseValidation.validate(source_path, allow_older?: true) do
-      :ok -> stage_database(source_path)
-      {:error, :not_sqlite} -> BackupArchive.stage(source_path, &Migration.prepare/1)
-      {:error, reason} -> {:error, reason}
+    with :ok <- BackupArchive.validate_file_size(source_path) do
+      case DatabaseValidation.validate(source_path, allow_older?: true) do
+        :ok -> stage_database(source_path)
+        {:error, :not_sqlite} -> BackupArchive.stage(source_path, &Migration.prepare/1)
+        {:error, reason} -> {:error, reason}
+      end
     end
   end
 
@@ -61,6 +63,9 @@ defmodule CiBookTracker.DatabaseRestore do
     end
   end
 
+  @spec backup_directory() :: String.t()
+  def backup_directory, do: default_backup_directory(DatabaseBackup.database_path())
+
   def safety_backup_filename(now \\ DateTime.utc_now()) do
     timestamp =
       now
@@ -77,7 +82,9 @@ defmodule CiBookTracker.DatabaseRestore do
   def error_message(:unsafe_archive),
     do: "The backup contains an invalid or unsafe file path."
 
-  def error_message(:backup_too_large), do: "The expanded backup is too large to restore."
+  def error_message(:backup_too_large),
+    do:
+      "This backup exceeds the #{BackupArchive.limit_label()} limit for the file or its expanded contents. Your current data has not changed."
 
   def error_message(:integrity_check_failed),
     do: "The selected database did not pass SQLite's integrity check."

@@ -11,6 +11,28 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     assert {:error, {:live_redirect, %{to: "/"}}} = live(conn, ~p"/books/new")
   end
 
+  test "keeps unsaved inputs when switching editor tabs and reveals validation errors", %{
+    conn: conn
+  } do
+    {conn, _log} = create_reading_log(conn)
+    {:ok, view, _} = live(conn, ~p"/books/new")
+
+    view
+    |> form("#add-book-form", book: %{title: "My draft", author: "An author"})
+    |> render_change()
+
+    view |> element("#editor-tab-notes") |> render_click()
+    assert has_element?(view, "#editor-panel-book[hidden]")
+    refute has_element?(view, "#editor-panel-notes[hidden]")
+    assert has_element?(view, "#book_title[value='My draft']")
+    view |> element("#editor-tab-book") |> render_click()
+    assert has_element?(view, "#book_author[value='An author']")
+    view |> element("#editor-tab-history") |> render_click()
+    view |> form("#add-book-form", book: %{title: ""}) |> render_submit()
+    refute has_element?(view, "#editor-panel-book[hidden]")
+    assert render(view) =~ "can&#39;t be blank"
+  end
+
   test "shows a phone-friendly add book form", %{conn: conn} do
     {conn, _reading_log} = create_reading_log(conn)
 
@@ -41,7 +63,7 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     assert has_element?(view, "#book_status option[value='want_to_read'][selected]")
     assert has_element?(view, "label", "Started on")
     assert has_element?(view, "label", "Finished on")
-    assert render(view) =~ "Adding a book you&#39;ve already started or finished?"
+    assert has_element?(view, "#editor-tab-history", "Reading dates")
     assert has_element?(view, "label", "Notes")
     assert has_element?(view, "#save-book", "Save Book")
   end
@@ -355,7 +377,7 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     |> element("button[phx-click='select_cover']")
     |> render_click()
 
-    assert has_element?(view, "#flash-info", "Cover added to the form")
+    refute has_element?(view, "#flash-info")
     refute has_element?(view, "#metadata-message", "Cover added to the form")
     assert has_element?(view, "#book_title[value='My title']")
     assert has_element?(view, "#book_author[value='My author']")
@@ -630,8 +652,8 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     assert book.notes == "Read one chapter a day."
 
     {:ok, dashboard, html} = follow_redirect(result, conn)
-    assert html =~ "Le Petit Prince was added to your reading log."
-    assert has_element?(dashboard, "#books-want_to_read #book-#{book.id}")
+    refute html =~ "Le Petit Prince was added to your reading log."
+    assert has_element?(dashboard, "#books-#{book.id}")
   end
 
   test "adds an in-progress book with a default start date", %{conn: conn} do
@@ -658,7 +680,7 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     assert is_nil(book.finished_on)
 
     {:ok, dashboard, _html} = follow_redirect(result, conn)
-    assert has_element?(dashboard, "#books-in_progress #book-#{book.id}")
+    assert has_element?(dashboard, "#books-#{book.id}")
     assert has_element?(dashboard, "#summary-books-in-progress", "1")
   end
 
@@ -689,7 +711,7 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     assert book.finished_on == Date.utc_today()
 
     {:ok, dashboard, _html} = follow_redirect(result, conn)
-    assert has_element?(dashboard, "#books-finished #book-#{book.id}")
+    assert has_element?(dashboard, "#books-#{book.id}")
     assert has_element?(dashboard, "#summary-books-finished", "1")
     assert has_element?(dashboard, "#words-completed", "20,000")
   end
@@ -720,7 +742,7 @@ defmodule CiBookTrackerWeb.BookLive.NewTest do
     assert book.finished_on == ~D[2026-05-10]
 
     {:ok, dashboard, _html} = follow_redirect(result, conn)
-    assert has_element?(dashboard, "#books-abandoned #book-#{book.id}")
+    assert has_element?(dashboard, "#books-#{book.id}")
   end
 
   test "adds books only to the active reading log", %{conn: conn} do

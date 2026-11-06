@@ -29,4 +29,24 @@ defmodule CiBookTrackerWeb.DatabaseExportControllerTest do
     assert Phoenix.Flash.get(conn.assigns.flash, :error) ==
              "The local database file could not be found."
   end
+
+  test "shows a recoverable message when creating an archive fails", %{conn: conn} do
+    conn = conn |> init_test_session(%{}) |> fetch_flash()
+    conn = DatabaseExportController.send_backup(conn, {:error, :snapshot_failed})
+    assert redirected_to(conn) == "/backup"
+
+    assert Phoenix.Flash.get(conn.assigns.flash, :error) ==
+             "We couldn't create a backup. Please try again."
+  end
+
+  test "explains the shared size limit when export is too large", %{conn: conn} do
+    conn = conn |> init_test_session(%{}) |> fetch_flash()
+    conn = DatabaseExportController.send_backup(conn, {:error, :backup_too_large})
+
+    assert redirected_to(conn) == "/backup"
+    message = Phoenix.Flash.get(conn.assigns.flash, :error)
+    assert message =~ "250 MB"
+    assert message =~ "ZIP file or its expanded contents"
+    assert message =~ "your library has not changed"
+  end
 end

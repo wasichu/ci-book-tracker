@@ -30,6 +30,8 @@ ci_book_tracker-*.tar
 
 # Ignore digested assets cache.
 /priv/static/cache_manifest.json
+/priv/static/**/*-????????????????????????????????.*
+/priv/static/**/*.gz
 
 # In case you use Node.js/npm, you want to ignore these.
 npm-debug.log
@@ -43,3 +45,6 @@ npm-debug.log
 
 # Python helpers used by the native release workflow.
 __pycache__/
+
+# Local design reviews and isolated sample-data previews.
+/work/

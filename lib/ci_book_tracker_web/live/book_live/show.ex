@@ -14,6 +14,7 @@ defmodule CiBookTrackerWeb.BookLive.Show do
        |> assign(:page_title, book.title)
        |> assign(:reading_log, reading_log)
        |> assign(:book, book)
+       |> assign(:detail_tab, "details")
        |> assign(:confirm_delete?, false)}
     else
       _missing ->
@@ -25,6 +26,11 @@ defmodule CiBookTrackerWeb.BookLive.Show do
   end
 
   @impl true
+  def handle_event("detail_tab", %{"tab" => tab}, socket)
+      when tab in ~w(details notes manage) do
+    {:noreply, assign(socket, :detail_tab, tab)}
+  end
+
   def handle_event("update_status", %{"action" => action}, socket)
       when action in ~w(start finish abandon) do
     case update_book_status(socket.assigns.book, action) do
@@ -72,8 +78,8 @@ defmodule CiBookTrackerWeb.BookLive.Show do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
-      <section id="book-detail" class="space-y-7">
+    <Layouts.app flash={@flash} workspace={@workspace}>
+      <section id="book-detail" class="space-y-5 workspace-book-detail">
         <header>
           <.link
             id="back-to-dashboard"
@@ -120,9 +126,22 @@ defmodule CiBookTrackerWeb.BookLive.Show do
           </div>
         </header>
 
+        <nav class="workspace-tabs" aria-label="Book details">
+          <button
+            :for={tab <- ~w(details notes manage)}
+            id={"detail-tab-#{tab}"}
+            type="button"
+            phx-click="detail_tab"
+            phx-value-tab={tab}
+            aria-pressed={to_string(@detail_tab == tab)}
+            class={[@detail_tab == tab && "is-active"]}
+          >{String.capitalize(tab)}</button>
+        </nav>
+
         <section
           :if={status_actions(@book.status) != []}
           id="book-status-actions"
+          hidden={@detail_tab != "details"}
           class="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60 sm:p-7"
         >
           <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
@@ -137,8 +156,7 @@ defmodule CiBookTrackerWeb.BookLive.Show do
               phx-value-action={action}
               phx-disable-with={"#{BookActions.label(action)}..."}
               class={[
-                "inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl px-5 text-sm font-semibold transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0 disabled:translate-y-0 disabled:cursor-wait disabled:opacity-60",
-                BookActions.class(action),
+                "workspace-button",
                 layout_class
               ]}
             >
@@ -149,6 +167,7 @@ defmodule CiBookTrackerWeb.BookLive.Show do
 
         <section
           id="book-details"
+          hidden={@detail_tab != "details"}
           class="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60 sm:p-7"
         >
           <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -164,21 +183,21 @@ defmodule CiBookTrackerWeb.BookLive.Show do
               <.link
                 id="find-metadata"
                 navigate={~p"/books/#{@book.id}/edit?metadata=refresh"}
-                class="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 text-sm font-semibold text-amber-900 transition hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+                class="workspace-button"
               >
-                <.icon name="hero-arrow-path" class="size-4" /> Refresh Metadata
+                <.icon name="hero-arrow-path" class="size-4" /> Refresh metadata
               </.link>
               <.link
                 id="edit-book"
                 navigate={~p"/books/#{@book.id}/edit"}
-                class="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
+                class="workspace-button"
               >
                 <.icon name="hero-pencil-square" class="size-4" /> Edit Book
               </.link>
             </div>
           </div>
 
-          <dl class="mt-6 divide-y divide-slate-100">
+          <dl class="mt-6">
             <.detail_row label="Status" value={BookFormat.status_label(@book.status)} />
             <.detail_row label="Difficulty" value={@book.difficulty_label} />
             <.detail_row label="Page count" value={format_pages(@book.page_count)} />
@@ -194,6 +213,7 @@ defmodule CiBookTrackerWeb.BookLive.Show do
 
         <section
           id="book-notes"
+          hidden={@detail_tab != "notes"}
           class="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60 sm:p-7"
         >
           <p class="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Notes</p>
@@ -204,6 +224,7 @@ defmodule CiBookTrackerWeb.BookLive.Show do
 
         <section
           id="book-danger-zone"
+          hidden={@detail_tab != "manage"}
           class="rounded-[2rem] border border-rose-200 bg-rose-50/50 p-5 sm:p-7"
         >
           <p class="text-xs font-semibold uppercase tracking-[0.16em] text-rose-700">

@@ -9,12 +9,22 @@ defmodule CiBookTrackerWeb.SettingsLive do
     {:ok,
      socket
      |> assign(:page_title, "Settings")
+     |> assign(:settings_tab, "providers")
+     |> assign(:provider_tab, "open_library")
      |> assign_database()
      |> assign_application()
      |> assign_provider_forms()}
   end
 
   @impl true
+  def handle_event("settings_tab", %{"tab" => tab}, socket)
+      when tab in ~w(providers data application),
+      do: {:noreply, assign(socket, :settings_tab, tab)}
+
+  def handle_event("provider_tab", %{"tab" => tab}, socket)
+      when tab in ~w(open_library google_books hardcover),
+      do: {:noreply, assign(socket, :provider_tab, tab)}
+
   def handle_event("save_provider", %{"provider" => params}, socket) do
     provider = provider(params["name"])
     enabled = params["enabled"] == "true"
@@ -36,9 +46,14 @@ defmodule CiBookTrackerWeb.SettingsLive do
             "#{provider_label(provider)} settings saved."
           end
 
+        kind =
+          if provider == :hardcover && params["enabled"] == "true" && !enabled,
+            do: :error,
+            else: :info
+
         {:noreply,
          socket
-         |> put_flash(:info, message)
+         |> put_flash(kind, message)
          |> assign_provider_forms()}
 
       {:error, _error} ->
@@ -49,7 +64,7 @@ defmodule CiBookTrackerWeb.SettingsLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} workspace={@workspace}>
       <section id="settings-page" class="space-y-8">
         <header>
           <.link
@@ -69,10 +84,29 @@ defmodule CiBookTrackerWeb.SettingsLive do
           </p>
         </header>
 
+        <nav class="workspace-tabs" aria-label="Settings sections">
+          <button
+            :for={
+              {tab, label} <- [
+                {"providers", "Metadata providers"},
+                {"data", "Local data"},
+                {"application", "About"}
+              ]
+            }
+            id={"settings-tab-#{tab}"}
+            type="button"
+            phx-click="settings_tab"
+            phx-value-tab={tab}
+            aria-pressed={to_string(@settings_tab == tab)}
+            class={[@settings_tab == tab && "is-active"]}
+          >{label}</button>
+        </nav>
+
         <.settings_section
           id="database-settings"
+          hidden={@settings_tab != "data"}
           icon="hero-circle-stack"
-          title="Local Data"
+          title="Local data"
           intro="Reading logs, books, settings, and cover images are stored locally on this device."
         >
           <dl class="divide-y divide-slate-100 text-sm">
@@ -83,27 +117,47 @@ defmodule CiBookTrackerWeb.SettingsLive do
           <.link
             id="settings-export-database"
             href={~p"/backup/database"}
-            class="mt-6 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 font-semibold text-white transition hover:-translate-y-0.5 hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 active:translate-y-0"
+            download
+            class="workspace-button mt-6"
           >
-            <.icon name="hero-arrow-down-tray" class="size-5" /> Export Backup
+            <.icon name="hero-arrow-down-tray" class="size-5" /> Export backup
           </.link>
         </.settings_section>
 
         <.settings_section
           id="metadata-provider-settings"
+          hidden={@settings_tab != "providers"}
           icon="hero-magnifying-glass"
-          title="Metadata Providers"
+          title="Metadata providers"
           intro="Choose which services can be used when searching for book details."
         >
-          <div class="space-y-6">
+          <nav class="workspace-tabs mb-5" aria-label="Metadata providers">
+            <button
+              :for={
+                {tab, label} <- [
+                  {"open_library", "Open Library"},
+                  {"google_books", "Google Books"},
+                  {"hardcover", "Hardcover"}
+                ]
+              }
+              id={"provider-tab-#{tab}"}
+              type="button"
+              phx-click="provider_tab"
+              phx-value-tab={tab}
+              aria-pressed={to_string(@provider_tab == tab)}
+              class={[@provider_tab == tab && "is-active"]}
+            >{label}</button>
+          </nav>
+          <div>
             <article
               id="open-library-settings"
-              class="rounded-2xl bg-emerald-50 p-4 ring-1 ring-emerald-100"
+              hidden={@provider_tab != "open_library"}
+              class="workspace-provider-summary"
             >
               <div class="flex items-center justify-between gap-4">
                 <h3 class="font-semibold text-slate-950">Open Library</h3>
-                <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
-                  Enabled
+                <span class="workspace-provider-status">
+                  <.icon name="hero-check" class="size-4" /> Enabled
                 </span>
               </div>
               <p class="mt-2 text-sm leading-6 text-slate-600">
@@ -113,6 +167,7 @@ defmodule CiBookTrackerWeb.SettingsLive do
 
             <.provider_form
               id="google-books-settings"
+              hidden={@provider_tab != "google_books"}
               title="Google Books"
               description="Works without a key, though a key can improve quota availability."
               form={@google_books_form}
@@ -122,6 +177,7 @@ defmodule CiBookTrackerWeb.SettingsLive do
 
             <.provider_form
               id="hardcover-settings"
+              hidden={@provider_tab != "hardcover"}
               title="Hardcover"
               description="Requires an API token. Hardcover stays unavailable until a token is configured."
               form={@hardcover_form}
@@ -133,12 +189,14 @@ defmodule CiBookTrackerWeb.SettingsLive do
 
         <.settings_section
           id="application-settings"
+          hidden={@settings_tab != "application"}
           icon="hero-information-circle"
-          title="Application"
-          intro="Runtime information for this installation."
+          title="About"
+          intro="Version information for this installation."
         >
           <dl class="divide-y divide-slate-100 text-sm">
             <.detail_row term="Version" value={@application.version} />
+            <.detail_row term="SQLite version" value={@application.sqlite_version} />
           </dl>
         </.settings_section>
       </section>
@@ -152,15 +210,18 @@ defmodule CiBookTrackerWeb.SettingsLive do
   attr :intro, :string, required: true
   slot :inner_block, required: true
 
+  attr :hidden, :boolean, default: false
+
   defp settings_section(assigns) do
     ~H"""
     <section
       id={@id}
+      hidden={@hidden}
       class="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60 sm:p-8"
     >
       <div class="flex items-start gap-4">
-        <span class="grid size-12 shrink-0 place-items-center rounded-2xl bg-amber-100 text-amber-800">
-          <.icon name={@icon} class="size-6" />
+        <span class="workspace-muted mt-1 shrink-0">
+          <.icon name={@icon} class="size-5" />
         </span>
         <div>
           <h2 class="text-xl font-semibold tracking-tight text-slate-950">{@title}</h2>
@@ -179,9 +240,11 @@ defmodule CiBookTrackerWeb.SettingsLive do
   attr :credential_label, :string, required: true
   attr :credential_placeholder, :string, required: true
 
+  attr :hidden, :boolean, default: false
+
   defp provider_form(assigns) do
     ~H"""
-    <article id={@id} class="rounded-2xl border border-slate-200 p-4 sm:p-5">
+    <article id={@id} hidden={@hidden} class="rounded-2xl border border-slate-200 p-4 sm:p-5">
       <h3 class="font-semibold text-slate-950">{@title}</h3>
       <p class="mt-1 text-sm leading-6 text-slate-600">{@description}</p>
       <.form for={@form} phx-submit="save_provider" class="mt-4 space-y-4">
@@ -203,7 +266,7 @@ defmodule CiBookTrackerWeb.SettingsLive do
         <.button
           type="submit"
           phx-disable-with="Saving..."
-          class="flex min-h-12 w-full items-center justify-center rounded-xl bg-amber-100 px-5 font-semibold text-amber-950 transition hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 sm:w-auto"
+          class="workspace-button workspace-primary"
         >
           Save {@title}
         </.button>
@@ -242,7 +305,8 @@ defmodule CiBookTrackerWeb.SettingsLive do
 
   defp assign_application(socket) do
     application = %{
-      version: :ci_book_tracker |> Application.spec(:vsn) |> to_string()
+      version: :ci_book_tracker |> Application.spec(:vsn) |> to_string(),
+      sqlite_version: CiBookTracker.Repo.sqlite_version()
     }
 
     assign(socket, :application, application)

@@ -24,7 +24,7 @@ defmodule CiBookTrackerWeb.WordEstimatorLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} workspace={@workspace}>
       <section id="word-estimator-page" class="space-y-7">
         <header>
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
@@ -38,16 +38,18 @@ defmodule CiBookTrackerWeb.WordEstimatorLive do
           </p>
         </header>
 
-        <.form for={@form} id="word-estimator-form" phx-change="estimate">
-          <WordEstimatorComponents.panel form={@form} result={@result} clear_event="clear" />
-        </.form>
-
-        <aside class="rounded-2xl border border-amber-200 bg-amber-50/70 p-5 text-sm leading-6 text-amber-950">
-          <p class="font-semibold">For a better estimate</p>
-          <p class="mt-1 text-amber-900/80">
+        <aside class="workspace-estimator-tip rounded-lg border text-sm leading-6">
+          <p class="flex items-center gap-2 font-semibold">
+            <.icon name="hero-light-bulb" class="size-4 shrink-0" /> For a better estimate
+          </p>
+          <p class="mt-1">
             Use a normal section of prose rather than a title page, contents page, or unusually dialogue-heavy passage.
           </p>
         </aside>
+
+        <.form for={@form} id="word-estimator-form" phx-change="estimate">
+          <WordEstimatorComponents.panel form={@form} result={@result} clear_event="clear" />
+        </.form>
       </section>
     </Layouts.app>
     """
