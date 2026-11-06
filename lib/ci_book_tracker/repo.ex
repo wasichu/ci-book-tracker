@@ -1,6 +1,10 @@
 defmodule CiBookTracker.Repo do
   use AshSqlite.Repo, otp_app: :ci_book_tracker
 
+  # Preserve the compatibility floor used before the Ash SQLite upgrade.
+  @impl true
+  def min_sqlite_version, do: %Version{major: 3, minor: 38, patch: 0}
+
   @spec sqlite_version() :: String.t()
   def sqlite_version do
     %{rows: [[version]]} = Ecto.Adapters.SQL.query!(__MODULE__, "SELECT sqlite_version()", [])
