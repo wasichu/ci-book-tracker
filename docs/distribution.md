@@ -82,10 +82,34 @@ Changing or deleting the key invalidates existing signed sessions. Application
 backup ZIPs contain the database and covers, not this key; moving a backup to
 another installation therefore starts with fresh browser sessions.
 
+## README screenshots
+
+For UI releases, use the disposable sample workspace:
+
+```sh
+mix run --no-start scripts/preview_screenshots.exs
+```
+
+Open the printed `http://localhost:4200` reading-log URL. This preview uses
+`ci-book-tracker-screenshot-preview` under the system temporary directory for
+its database and covers, and does not read the personal library. The first run
+tries to download a few sample covers; unavailable covers use placeholders.
+Stop the preview with Ctrl-C when finished.
+
+Refresh the existing captures linked from README.md, and add captures for new
+workflows when useful. Keep the viewport and theme consistent across the set.
+Check the current sidebar, summary, actions, and empty states against the
+release candidate; do not reuse an older screenshot just because its filename
+still exists. Commit README changes and PNGs with the UI release.
+
 ## Publishing a version
 
 1. Run `mix precommit`, update the version in `mix.exs` as appropriate, and
-   commit the changes. Back up personal data before testing upgrades.
+   commit the changes. For UI changes, refresh every affected README screenshot
+   in `docs/screenshots/` before tagging, including screens whose shared sidebar
+   or layout changed. Review the captures at their README display size. Use only
+   isolated sample data and dummy provider credentials; never capture personal
+   data. Back up personal data before testing upgrades.
 2. Push a matching stable tag, for example `v0.2.0` for version `0.2.0`.
 3. The release workflow builds and smoke-tests all three targets. Only after
    all succeed does it create a **draft** GitHub release containing the three

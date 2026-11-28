@@ -63,6 +63,8 @@ screen in a browser when available. Report checks actually run and any gaps.
 - Preserve ZIP backups with local covers, legacy SQLite restore compatibility,
   migration checks, and automatic safety backups before replacement. Export,
   upload, and expanded-backup limits must remain consistent.
+- UI releases must refresh affected README screenshots using isolated sample data
+  before tagging; follow the screenshot workflow in `docs/distribution.md`.
 - Packaged releases generate/persist their session secret and run migrations on
   startup. Follow `docs/distribution.md` for packaging, platform checks, and releases.
 
