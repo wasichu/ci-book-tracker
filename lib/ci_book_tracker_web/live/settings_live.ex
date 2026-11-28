@@ -255,14 +255,32 @@ defmodule CiBookTrackerWeb.SettingsLive do
           type="checkbox"
           label="Enabled"
         />
-        <.input
-          id={"#{@id}-credential"}
-          field={@form[:credential]}
-          type="password"
-          label={@credential_label}
-          placeholder={@credential_placeholder}
-          autocomplete="off"
-        />
+        <div
+          id={"#{@id}-credential-control"}
+          class="workspace-credential"
+          phx-hook="CredentialVisibility"
+        >
+          <.input
+            id={"#{@id}-credential"}
+            field={@form[:credential]}
+            type="password"
+            label={@credential_label}
+            placeholder={@credential_placeholder}
+            autocomplete="off"
+          />
+          <button
+            id={"#{@id}-toggle-credential"}
+            type="button"
+            class="workspace-button"
+            data-toggle-credential
+            aria-label="Show API key"
+            aria-controls={"#{@id}-credential"}
+            aria-pressed="false"
+          >
+            <span data-show-icon><.icon name="hero-eye" class="size-4" /></span>
+            <span data-hide-icon hidden><.icon name="hero-eye-slash" class="size-4" /></span>
+          </button>
+        </div>
         <.button
           type="submit"
           phx-disable-with="Saving..."

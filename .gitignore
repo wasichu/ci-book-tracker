@@ -48,3 +48,6 @@ __pycache__/
 
 # Local design reviews and isolated sample-data previews.
 /work/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/

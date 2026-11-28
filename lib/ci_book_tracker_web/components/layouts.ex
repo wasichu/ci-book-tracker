@@ -71,25 +71,10 @@ defmodule CiBookTrackerWeb.Layouts do
       <.flash_group flash={@flash} />
       <div class="workspace-body">
         <aside id="workspace-sidebar" class="workspace-sidebar" aria-label="Application navigation">
-          <p class="workspace-eyebrow">Workspace</p>
-          <.link
-            id="workspace-library"
-            navigate={if @workspace.log, do: ~p"/dashboard", else: ~p"/"}
-            class={["workspace-nav", @workspace.path == "/dashboard" && "is-active"]}
-          >
-            <.icon name="hero-rectangle-stack" class="size-4" /> Library
-          </.link>
-          <.link
-            :if={@workspace.log}
-            id="workspace-progress"
-            navigate={~p"/dashboard?view=progress"}
-            class="workspace-nav"
-          >
-            <.icon name="hero-chart-bar" class="size-4" /> Progress
-          </.link>
-          <p class="workspace-eyebrow mt-7">Reading logs</p>
+          <p class="workspace-eyebrow">Reading logs</p>
           <.link
             :for={log <- @workspace.logs}
+            id={"workspace-reading-log-#{log.id}"}
             href={~p"/reading-logs/#{log.id}/open"}
             class={[
               "workspace-nav workspace-log",
@@ -101,11 +86,15 @@ defmodule CiBookTrackerWeb.Layouts do
               log.language_code
             )}</span>
           </.link>
-          <.link navigate={~p"/reading-logs/new"} class="workspace-nav workspace-muted"><.icon
-            name="hero-plus"
-            class="size-4"
-          /> New reading log</.link>
           <div class="workspace-sidebar-tools">
+            <.link
+              id="workspace-new-reading-log"
+              navigate={~p"/reading-logs/new"}
+              class={["workspace-nav", @workspace.path == "/reading-logs/new" && "is-active"]}
+              aria-current={if @workspace.path == "/reading-logs/new", do: "page"}
+            >
+              <.icon name="hero-plus" class="size-4" /> New reading log
+            </.link>
             <.link
               id="word-estimator-link"
               navigate={~p"/word-estimator"}
@@ -131,15 +120,12 @@ defmodule CiBookTrackerWeb.Layouts do
               <.icon name="hero-adjustments-horizontal" class="size-4" /> Settings
             </.link>
           </div>
-          <span class="workspace-local"><span class="workspace-dot"></span>
-          Your library, saved locally</span>
         </aside>
         <main id="workspace-main" class={["workspace-content", !@canvas && "workspace-document"]}>
           {render_slot(@inner_block)}
         </main>
       </div>
       <footer class="workspace-footer">
-        <span class="workspace-dot"></span><span>Saved on this device</span>
         <span class="ml-auto">⌘ K Commands</span>
       </footer>
       <dialog

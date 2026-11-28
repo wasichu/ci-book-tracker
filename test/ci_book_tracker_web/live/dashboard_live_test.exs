@@ -73,6 +73,62 @@ defmodule CiBookTrackerWeb.DashboardLiveTest do
     refute has_element?(view, "#select-book-#{first.id}[aria-pressed=true]")
   end
 
+  test "adds notes in the inspector and preserves existing notes", %{conn: conn} do
+    log = Library.create_reading_log!("Spanish", "es", nil)
+    book = Library.add_book!(log.id, "Notes", %{notes: "An existing thought"})
+    {:ok, view, _} = live(active_log(conn, log), ~p"/dashboard")
+    view |> element("#inspector-tab-notes") |> render_click()
+
+    view
+    |> form("#inspector-note-form-#{book.id}", note: %{body: "  A new thought  "})
+    |> render_submit()
+
+    assert Library.get_book!(book.id).notes == "An existing thought\n\nA new thought"
+    assert has_element?(view, "#inspector-notes", "A new thought")
+    assert has_element?(view, "#inspector-tab-notes[aria-pressed=true]")
+    refute has_element?(view, "textarea[name='note[body]']", "A new thought")
+  end
+
+  test "keeps note drafts per book and rejects blank or stale submissions", %{conn: conn} do
+    log = Library.create_reading_log!("Spanish", "es", nil)
+    first = Library.add_book!(log.id, "First")
+    second = Library.add_book!(log.id, "Second")
+    {:ok, view, _} = live(active_log(conn, log), ~p"/dashboard?book=#{first.id}")
+    view |> element("#inspector-tab-notes") |> render_click()
+
+    view
+    |> form("#inspector-note-form-#{first.id}", note: %{body: "Keep this draft"})
+    |> render_change()
+
+    view |> element("#select-book-#{second.id}") |> render_click()
+    view |> element("#inspector-tab-notes") |> render_click()
+    refute has_element?(view, "textarea", "Keep this draft")
+    render_submit(view, "add_note", %{"note" => %{"book_id" => first.id, "body" => "Wrong book"}})
+    assert is_nil(Library.get_book!(first.id).notes)
+    assert is_nil(Library.get_book!(second.id).notes)
+    view |> element("#select-book-#{first.id}") |> render_click()
+    view |> element("#inspector-tab-notes") |> render_click()
+    assert has_element?(view, "textarea", "Keep this draft")
+    view |> form("#inspector-note-form-#{first.id}", note: %{body: "   "}) |> render_submit()
+    assert has_element?(view, "#inspector-notes", "Write a note before adding it.")
+    assert is_nil(Library.get_book!(first.id).notes)
+  end
+
+  test "preserves the note draft when saving fails", %{conn: conn} do
+    log = Library.create_reading_log!("Spanish", "es", nil)
+    book = Library.add_book!(log.id, "Removed elsewhere")
+    {:ok, view, _} = live(active_log(conn, log), ~p"/dashboard")
+    view |> element("#inspector-tab-notes") |> render_click()
+    Library.delete_book!(book)
+
+    view
+    |> form("#inspector-note-form-#{book.id}", note: %{body: "Don't lose this"})
+    |> render_submit()
+
+    assert has_element?(view, "textarea", "Don't lose this")
+    assert has_element?(view, "#inspector-notes", "Couldn't save your note. Please try again.")
+  end
+
   test "hides and reopens the inspector without navigating away", %{conn: conn} do
     log = Library.create_reading_log!("Spanish", "es", nil)
     book = Library.add_book!(log.id, "Covered book")
@@ -178,7 +234,7 @@ defmodule CiBookTrackerWeb.DashboardLiveTest do
     Library.add_book!(log.id, "Reading", %{estimated_words: 20_000}) |> Library.start_book!()
     {:ok, view, _} = live(active_log(conn, log), ~p"/dashboard")
     refute has_element?(view, "#reading-progress-panel")
-    render_patch(view, ~p"/dashboard?view=progress")
+    view |> element("#summary-cards #summary-progress-link") |> render_click()
     assert has_element?(view, "#word-goal-card", "100 thousand words")
     assert has_element?(view, "#summary-progress-volume", "20,000")
     assert has_element?(view, "#summary-progress-volume", "Words in progress")

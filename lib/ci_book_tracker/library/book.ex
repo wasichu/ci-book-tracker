@@ -47,6 +47,24 @@ defmodule CiBookTracker.Library.Book do
       accept @editable_attributes
     end
 
+    update :add_note do
+      accept []
+
+      argument :note, :string do
+        allow_nil? false
+      end
+
+      change atomic_update(
+               :notes,
+               expr(
+                 if(is_nil(notes) or notes == "",
+                   do: ^arg(:note),
+                   else: notes <> "\n\n" <> ^arg(:note)
+                 )
+               )
+             )
+    end
+
     update :edit_with_cover do
       accept @editable_attributes ++ @cover_attributes
       require_atomic? false

@@ -39,6 +39,7 @@ defmodule CiBookTrackerWeb.DashboardLive do
          |> assign(:page_index, 0)
          |> assign(:page_size, 4)
          |> assign(:selected_book, nil)
+         |> assign(:note_drafts, %{})
          |> assign(:inspector_open?, true)
          |> assign(:inspector_tab, "details")
          |> assign(:progress_open?, false)
@@ -115,6 +116,39 @@ defmodule CiBookTrackerWeb.DashboardLive do
   def handle_event("inspector_tab", %{"tab" => tab}, socket)
       when tab in ~w(details notes metadata) do
     {:noreply, assign(socket, :inspector_tab, tab)}
+  end
+
+  def handle_event("draft_note", %{"note" => %{"book_id" => id, "body" => body}}, socket) do
+    if socket.assigns.selected_book && socket.assigns.selected_book.id == id do
+      {:noreply, socket |> remember_note_draft(id, body) |> assign_note_form()}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("add_note", %{"note" => %{"book_id" => id, "body" => body}}, socket) do
+    case socket.assigns.selected_book do
+      %{id: ^id} = book ->
+        socket = remember_note_draft(socket, id, body)
+
+        if String.trim(body) == "" do
+          {:noreply, assign_note_form(socket, "Write a note before adding it.")}
+        else
+          case Library.add_book_note(book, body) do
+            {:ok, _book} ->
+              {:noreply,
+               socket
+               |> update(:note_drafts, &Map.delete(&1, id))
+               |> assign_dashboard(socket.assigns.reading_log)}
+
+            {:error, _error} ->
+              {:noreply, assign_note_form(socket, "Couldn't save your note. Please try again.")}
+          end
+        end
+
+      _ ->
+        {:noreply, socket}
+    end
   end
 
   def handle_event("toggle_inspector", _params, socket),
@@ -201,7 +235,24 @@ defmodule CiBookTrackerWeb.DashboardLive do
         socket.assigns.search_query != "" || socket.assigns.status_filter != :all ||
           socket.assigns.difficulty_filter != :all
     )
+    |> assign_note_form()
     |> stream(:books, page, reset: true)
+  end
+
+  defp remember_note_draft(socket, id, body) do
+    update(socket, :note_drafts, &Map.put(&1, id, body))
+  end
+
+  defp assign_note_form(socket, error \\ nil) do
+    id = socket.assigns.selected_book && socket.assigns.selected_book.id
+    body = Map.get(socket.assigns.note_drafts, id, "")
+    errors = if error, do: [body: {error, []}], else: []
+
+    assign(
+      socket,
+      :note_form,
+      to_form(%{"book_id" => id, "body" => body}, as: :note, errors: errors)
+    )
   end
 
   defp status_rank(:in_progress), do: 0

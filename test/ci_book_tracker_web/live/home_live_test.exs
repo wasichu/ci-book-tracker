@@ -10,10 +10,22 @@ defmodule CiBookTrackerWeb.HomeLiveTest do
 
     assert has_element?(view, "#reading-log-selector")
     assert has_element?(view, "#empty-reading-logs", "No reading logs yet")
-    assert has_element?(view, "#new-reading-log", "Create a new reading log")
     assert has_element?(view, "#create-reading-log", "Create New Reading Log")
-    assert has_element?(view, "#create-reading-log[href='/reading-logs/new']")
-    assert has_element?(view, "#existing-reading-logs", "Continue reading")
+
+    assert has_element?(
+             view,
+             ".log-section-heading #create-reading-log[href='/reading-logs/new']"
+           )
+
+    assert has_element?(view, ".log-section-heading #restore-backup[href='/settings/restore']")
+
+    assert has_element?(
+             view,
+             ".workspace-sidebar-tools #workspace-new-reading-log[href='/reading-logs/new']"
+           )
+
+    assert has_element?(view, ".workspace-sidebar-tools #workspace-backup[href='/backup']")
+    refute has_element?(view, "#workspace-restore")
     assert has_element?(view, "#existing-reading-logs", "Continue reading")
   end
 

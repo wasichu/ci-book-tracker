@@ -1,23 +1,3 @@
-// If you want to use Phoenix channels, run `mix help phx.gen.channel`
-// to get started and then uncomment the line below.
-// import "./user_socket.js"
-
-// You can include dependencies in two ways.
-//
-// The simplest option is to put them in assets/vendor and
-// import them using relative paths:
-//
-//     import "../vendor/some-package.js"
-//
-// Alternatively, you can `npm install some-package --prefix assets` and import
-// them using a path starting with the package name:
-//
-//     import "some-package"
-//
-// If you have dependencies that try to import CSS, esbuild will generate a separate `app.css` file.
-// To load it, simply add a second `<link>` to your `root.html.heex` file.
-
-// Include phoenix_html to handle method=PUT/DELETE in forms and buttons.
 import "phoenix_html"
 // Establish Phoenix Socket and LiveView configuration.
 import {Socket} from "phoenix"
@@ -25,65 +5,14 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/ci_book_tracker"
 import topbar from "../vendor/topbar"
 import {Workspace, BookViewport} from "./workspace"
-
-const ClipboardCopy = {
-  mounted() {
-    this.defaultLabel = this.el.querySelector("[data-copy-label]").textContent
-
-    this.handleClick = async () => {
-      const text = this.el.dataset.copyText
-
-      try {
-        await this.copy(text)
-        this.showStatus("Copied")
-      } catch (_error) {
-        this.showStatus("Copy failed")
-      }
-    }
-
-    this.el.addEventListener("click", this.handleClick)
-  },
-
-  destroyed() {
-    this.el.removeEventListener("click", this.handleClick)
-    window.clearTimeout(this.statusTimer)
-  },
-
-  async copy(text) {
-    if (navigator.clipboard && window.isSecureContext) {
-      return navigator.clipboard.writeText(text)
-    }
-
-    const input = document.createElement("textarea")
-    input.value = text
-    input.setAttribute("readonly", "")
-    input.style.position = "fixed"
-    input.style.opacity = "0"
-    document.body.appendChild(input)
-    input.select()
-
-    const copied = document.execCommand("copy")
-    document.body.removeChild(input)
-
-    if (!copied) throw new Error("Clipboard copy failed")
-  },
-
-  showStatus(status) {
-    const label = this.el.querySelector("[data-copy-label]")
-    label.textContent = status
-    window.clearTimeout(this.statusTimer)
-
-    this.statusTimer = window.setTimeout(() => {
-      label.textContent = this.defaultLabel
-    }, 2000)
-  },
-}
+import {ClipboardCopy} from "./hooks/clipboard_copy"
+import {CredentialVisibility} from "./hooks/credential_visibility"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, ClipboardCopy, Workspace, BookViewport},
+  hooks: {...colocatedHooks, ClipboardCopy, CredentialVisibility, Workspace, BookViewport},
 })
 
 // Show progress bar on live navigation and form submits

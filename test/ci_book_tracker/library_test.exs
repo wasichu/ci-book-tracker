@@ -25,6 +25,16 @@ defmodule CiBookTracker.LibraryTest do
       assert is_nil(book.notes)
     end
 
+    test "adds notes atomically without overwriting existing or intervening notes" do
+      log = create_reading_log()
+      book = Library.add_book!(log.id, "Notes")
+
+      assert Library.add_book_note!(book, "  First note  ").notes == "First note"
+      assert Library.add_book_note!(book, "Second note").notes == "First note\n\nSecond note"
+      assert {:error, _} = Library.add_book_note(book, "   ")
+      assert Library.get_book!(book.id).notes == "First note\n\nSecond note"
+    end
+
     test "requires a book title" do
       reading_log = create_reading_log()
 

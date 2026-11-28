@@ -46,8 +46,26 @@ defmodule CiBookTrackerWeb.HomeLive do
 
         <section id="existing-reading-logs">
           <div class="log-section-heading">
-            <h2>Continue reading</h2>
-            <span class="workspace-muted">{length(@reading_logs)} logs</span>
+            <div class="log-section-title">
+              <h2>Continue reading</h2>
+              <span class="workspace-muted">{length(@reading_logs)} logs</span>
+            </div>
+            <div class="log-section-actions">
+              <.link
+                id="create-reading-log"
+                navigate={~p"/reading-logs/new"}
+                class="workspace-button"
+              >
+                <.icon name="hero-plus" class="size-4" /> Create New Reading Log
+              </.link>
+              <.link
+                id="restore-backup"
+                navigate={~p"/settings/restore"}
+                class="workspace-button"
+              >
+                <.icon name="hero-arrow-up-tray" class="size-4" /> Restore from backup
+              </.link>
+            </div>
           </div>
           <div :if={@reading_logs == []} id="empty-reading-logs" class="log-empty">
             <p>No reading logs yet</p>
@@ -104,29 +122,6 @@ defmodule CiBookTrackerWeb.HomeLive do
                 </button>
               </div>
             </article>
-          </div>
-        </section>
-
-        <section id="new-reading-log" class="log-new">
-          <header>
-            <h2>Create a new reading log</h2>
-            <p class="workspace-muted">A fresh space for another language or reading goal.</p>
-          </header>
-          <div class="log-new-actions">
-            <.link
-              id="create-reading-log"
-              navigate={~p"/reading-logs/new"}
-              class="workspace-button"
-            >
-              <.icon name="hero-plus" class="size-4" /> Create New Reading Log
-            </.link>
-            <.link
-              id="restore-backup"
-              navigate={~p"/settings/restore"}
-              class="workspace-button"
-            >
-              <.icon name="hero-arrow-up-tray" class="size-4" /> Restore from backup
-            </.link>
           </div>
         </section>
       </section>

@@ -29,11 +29,18 @@
             aria-valuemin="0"
             aria-valuemax="100"
           ><span style={"width: #{@summary.goal_progress}%"}></span></span>
-          <.link patch={~p"/dashboard?view=progress"}>{@summary.goal_progress}% of {BookFormat.words(
-            @reading_log.word_goal
-          )}</.link>
+          <span>{@summary.goal_progress}% of {BookFormat.words(@reading_log.word_goal)}</span>
         </div>
         <span :if={is_nil(@reading_log.word_goal)} class="workbench-no-goal">Build your reading habit one book at a time.</span>
+        <.link
+          id="summary-progress-link"
+          patch={~p"/dashboard?view=progress"}
+          class="workspace-icon-button workbench-summary-link"
+          aria-label="View reading progress"
+          title="View reading progress"
+        >
+          <.icon name="hero-arrow-trending-up" class="size-5" />
+        </.link>
       </div>
 
       <div class="workbench-search-bar">
@@ -284,11 +291,31 @@
             </div>
           </dl>
           <div :if={@inspector_tab == "notes"} id="inspector-notes" class="workbench-notes">
+            <.form
+              for={@note_form}
+              id={"inspector-note-form-#{@selected_book.id}"}
+              class="workbench-note-form"
+              phx-change="draft_note"
+              phx-submit="add_note"
+            >
+              <input type="hidden" name="note[book_id]" value={@selected_book.id} />
+              <.input
+                field={@note_form[:body]}
+                type="textarea"
+                label="Add a note"
+                placeholder="A thought or something to remember…"
+                rows="3"
+                class="workbench-note-input"
+              />
+              <button type="submit" class="workspace-button" phx-disable-with="Adding…">
+                <.icon name="hero-plus" class="size-4" /> Add note
+              </button>
+            </.form>
             <%= if @selected_book.notes do %>
               <p class="whitespace-pre-wrap">{@selected_book.notes}</p>
             <% else %>
               <p class="workspace-muted">
-                No notes yet. Add a thought or something to remember while editing this book.
+                No notes yet. Add your first note above.
               </p>
             <% end %>
           </div>
