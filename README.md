@@ -50,6 +50,14 @@ Further background:
 
 ![Reading log selection with sample Spanish and French logs](docs/screenshots/home.png)
 
+### Notes in the inspector
+
+![Add a note directly in the selected book inspector while keeping the library in view](docs/screenshots/inspector-notes.png)
+
+### Provider credentials
+
+![Google Books settings with an eye control revealing an illustrative API key, not a real credential](docs/screenshots/provider-settings.png)
+
 ### Book details
 
 ![Book details and reading actions for a sample book](docs/screenshots/book-details.png)
@@ -74,6 +82,7 @@ Further background:
 - Multiple language-specific reading logs
 - Editable reading goals and estimated words-read totals
 - Add, edit, view, and delete books
+- Add notes directly from the book inspector, with a separate draft for each book
 - Book status workflow:
   - Want to Read
   - In Progress
